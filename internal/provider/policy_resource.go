@@ -476,14 +476,24 @@ func updatePolicyRequest(model PolicyResourceModel) UpdatePolicyRequest {
 
 // updatePolicyResourceModel updates a PolicyResourceModel with the data from a Policy
 func updatePolicyResourceModel(model *PolicyResourceModel, policy *Policy) {
+	// Use stringOrEmpty to convert potential null values to empty strings
 	model.ID = types.StringValue(policy.ID)
-	model.Name = types.StringValue(policy.Name)
-	model.Description = types.StringValue(policy.Description)
+	model.Name = types.StringValue(stringOrEmpty(policy.Name))
+	model.Description = types.StringValue(stringOrEmpty(policy.Description))
 	model.Enforced = types.BoolValue(policy.Enforced)
-	model.Explanation = types.StringValue(policy.Explanation)
+	model.Explanation = types.StringValue(stringOrEmpty(policy.Explanation))
 	model.NamespaceID = types.StringValue(policy.NamespaceID)
 	model.PPL = types.StringValue(string(policy.PPL))
-	model.Remediation = types.StringValue(policy.Remediation)
+	model.Remediation = types.StringValue(stringOrEmpty(policy.Remediation))
+}
+
+// stringOrEmpty is a helper function that converts null string values to empty strings
+// This ensures that null values from the API are stored as empty strings in Terraform state
+func stringOrEmpty(s string) string {
+	if s == "null" {
+		return ""
+	}
+	return s
 }
 
 // API data structures
