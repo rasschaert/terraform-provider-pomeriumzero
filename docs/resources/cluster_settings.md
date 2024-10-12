@@ -18,17 +18,17 @@ Manages Pomerium Zero Cluster Settings.
 ### Optional
 
 - `address` (String) The address of the Pomerium Zero cluster.
-- `authenticate_service_url` (String) The URL of the authentication service.
+- `authenticate_service_url` (String) The URL of the authentication service (required if using custom IDP).
 - `auto_apply_changesets` (Boolean) Whether to automatically apply changesets.
 - `cookie_expire` (String) The expiration time for cookies.
 - `cookie_http_only` (Boolean) Whether cookies should be HTTP only.
 - `cookie_name` (String) The name of the cookie used for authentication.
 - `default_upstream_timeout` (String) The default timeout for upstream requests.
 - `dns_lookup_family` (String) The DNS lookup family to use (e.g., 'v4', 'v6').
-- `identity_provider` (String) The identity provider to use for authentication.
-- `identity_provider_client_id` (String) The client ID for the identity provider.
-- `identity_provider_client_secret` (String, Sensitive) The client secret for the identity provider.
-- `identity_provider_url` (String) The URL of the identity provider.
+- `identity_provider` (String) The identity provider to use for authentication. If not set, Hosted Authenticate will be used.
+- `identity_provider_client_id` (String) The client ID for the identity provider (required if using custom IDP).
+- `identity_provider_client_secret` (String, Sensitive) The client secret for the identity provider (required if using custom IDP).
+- `identity_provider_url` (String) The URL of the identity provider (required if using custom IDP).
 - `log_level` (String) The log level for the Pomerium Zero cluster.
 - `pass_identity_headers` (Boolean) Whether to pass identity headers to upstream services.
 - `proxy_log_level` (String) The log level for the proxy component.
