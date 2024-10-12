@@ -311,6 +311,7 @@ func (r *ClusterSettingsResource) Read(ctx context.Context, req resource.ReadReq
 	}
 
 	// Update the state with the fetched settings
+	// For non-nullable fields, we can directly set the values
 	state.Address = types.StringValue(apiSettings.Address)
 	state.AutoApplyChangesets = types.BoolValue(apiSettings.AutoApplyChangesets)
 	state.CookieExpire = types.StringValue(apiSettings.CookieExpire)
@@ -327,41 +328,55 @@ func (r *ClusterSettingsResource) Read(ctx context.Context, req resource.ReadReq
 	state.TracingSampleRate = types.Float64Value(apiSettings.TracingSampleRate)
 
 	// Handle potentially null values
+	// For fields that can be null, we need to check if they're empty and set them to null if so
+	// This ensures that Terraform correctly detects when a field is unset, rather than set to an empty string
+
+	// Handle potentially null values
+
+	// AuthenticateServiceUrl
 	if apiSettings.AuthenticateServiceUrl != "" {
 		state.AuthenticateServiceUrl = types.StringValue(apiSettings.AuthenticateServiceUrl)
 	} else {
 		state.AuthenticateServiceUrl = types.StringNull()
 	}
 
+	// IdentityProvider
 	if apiSettings.IdentityProvider != "" {
 		state.IdentityProvider = types.StringValue(apiSettings.IdentityProvider)
 	} else {
 		state.IdentityProvider = types.StringNull()
 	}
 
+	// IdentityProviderClientId
 	if apiSettings.IdentityProviderClientId != "" {
 		state.IdentityProviderClientId = types.StringValue(apiSettings.IdentityProviderClientId)
 	} else {
 		state.IdentityProviderClientId = types.StringNull()
 	}
 
+	// IdentityProviderClientSecret
 	if apiSettings.IdentityProviderClientSecret != nil {
 		state.IdentityProviderClientSecret = types.StringValue(*apiSettings.IdentityProviderClientSecret)
 	} else {
 		state.IdentityProviderClientSecret = types.StringNull()
 	}
 
+	// IdentityProviderUrl
 	if apiSettings.IdentityProviderUrl != "" {
 		state.IdentityProviderUrl = types.StringValue(apiSettings.IdentityProviderUrl)
 	} else {
 		state.IdentityProviderUrl = types.StringNull()
 	}
 
+	// Special handling for ProxyLogLevel
+	// The API may return null for this field, but doesn't accept null as a value when updating
+	// If it's an empty string from the API, we set it to null in the Terraform state
 	if apiSettings.ProxyLogLevel != "" {
 		state.ProxyLogLevel = types.StringValue(apiSettings.ProxyLogLevel)
 	} else {
 		state.ProxyLogLevel = types.StringNull()
 	}
+
 
 	// Ensure the ID in the state matches the one from the API
 	state.ID = types.StringValue(id)
@@ -707,6 +722,7 @@ func createClusterSettingsRequest(model ClusterSettingsResourceModel) CreateClus
 
 // updateClusterSettingsRequest creates an UpdateClusterSettingsRequest from the ClusterSettingsResourceModel
 func updateClusterSettingsRequest(model ClusterSettingsResourceModel) UpdateClusterSettingsRequest {
+	// Initialize the request with non-nullable fields
 	req := UpdateClusterSettingsRequest{
 		Address:               model.Address.ValueString(),
 		AutoApplyChangesets:   model.AutoApplyChangesets.ValueBool(),
@@ -724,25 +740,43 @@ func updateClusterSettingsRequest(model ClusterSettingsResourceModel) UpdateClus
 		TracingSampleRate:     model.TracingSampleRate.ValueFloat64(),
 	}
 
+	// For nullable fields, only include them in the request if they're not null
+	// This prevents sending empty strings or zero values when the field should be unset
+
+	// AuthenticateServiceUrl
 	if !model.AuthenticateServiceUrl.IsNull() {
 		req.AuthenticateServiceUrl = model.AuthenticateServiceUrl.ValueString()
 	}
+
+	// IdentityProvider
 	if !model.IdentityProvider.IsNull() {
 		req.IdentityProvider = model.IdentityProvider.ValueString()
 	}
+
+	// IdentityProviderClientId
 	if !model.IdentityProviderClientId.IsNull() {
 		req.IdentityProviderClientId = model.IdentityProviderClientId.ValueString()
 	}
+
+	// IdentityProviderClientSecret
+	// This field is a pointer in the request, so we need to set it differently
 	if !model.IdentityProviderClientSecret.IsNull() {
 		value := model.IdentityProviderClientSecret.ValueString()
 		req.IdentityProviderClientSecret = &value
 	}
+
+	// IdentityProviderUrl
 	if !model.IdentityProviderUrl.IsNull() {
 		req.IdentityProviderUrl = model.IdentityProviderUrl.ValueString()
 	}
-	if !model.ProxyLogLevel.IsNull() {
+
+	// Special handling for ProxyLogLevel
+	// Only include it in the request if it's not null and not an empty string
+	if !model.ProxyLogLevel.IsNull() && model.ProxyLogLevel.ValueString() != "" {
 		req.ProxyLogLevel = model.ProxyLogLevel.ValueString()
 	}
+	// Note: If ProxyLogLevel is null or an empty string, it will be omitted from the request
+
 
 	return req
 }
