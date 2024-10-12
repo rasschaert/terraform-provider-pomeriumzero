@@ -84,11 +84,6 @@ func (r *ClusterSettingsResource) Schema(_ context.Context, _ resource.SchemaReq
 				Optional:            true,
 				MarkdownDescription: "The address of the Pomerium Zero cluster.",
 			},
-			// AuthenticateServiceUrl is the endpoint for the authentication service
-			"authenticate_service_url": resource_schema.StringAttribute{
-				Optional:            true,
-				MarkdownDescription: "The URL of the authentication service.",
-			},
 			// AutoApplyChangesets determines if changes should be applied automatically
 			"auto_apply_changesets": resource_schema.BoolAttribute{
 				Optional:            true,
@@ -122,23 +117,28 @@ func (r *ClusterSettingsResource) Schema(_ context.Context, _ resource.SchemaReq
 			// IdentityProvider specifies the authentication provider
 			"identity_provider": resource_schema.StringAttribute{
 				Optional:            true,
-				MarkdownDescription: "The identity provider to use for authentication.",
+				MarkdownDescription: "The identity provider to use for authentication. If not set, Hosted Authenticate will be used.",
 			},
 			// IdentityProviderClientId is the client ID for the identity provider
 			"identity_provider_client_id": resource_schema.StringAttribute{
 				Optional:            true,
-				MarkdownDescription: "The client ID for the identity provider.",
+				MarkdownDescription: "The client ID for the identity provider (required if using custom IDP).",
 			},
 			// IdentityProviderClientSecret is the client secret for the identity provider
 			"identity_provider_client_secret": resource_schema.StringAttribute{
 				Optional:            true,
 				Sensitive:           true,
-				MarkdownDescription: "The client secret for the identity provider.",
+				MarkdownDescription: "The client secret for the identity provider (required if using custom IDP).",
 			},
 			// IdentityProviderUrl is the URL of the identity provider
 			"identity_provider_url": resource_schema.StringAttribute{
 				Optional:            true,
-				MarkdownDescription: "The URL of the identity provider.",
+				MarkdownDescription: "The URL of the identity provider (required if using custom IDP).",
+			},
+			// AuthenticateServiceUrl is the endpoint for the authentication service
+			"authenticate_service_url": resource_schema.StringAttribute{
+				Optional:            true,
+				MarkdownDescription: "The URL of the authentication service (required if using custom IDP).",
 			},
 			// LogLevel sets the logging verbosity for the Pomerium Zero cluster
 			"log_level": resource_schema.StringAttribute{
@@ -184,6 +184,39 @@ func (r *ClusterSettingsResource) Schema(_ context.Context, _ resource.SchemaReq
 	}
 }
 
+// ValidateConfig checks the configuration for the ClusterSettingsResource
+// It ensures that the identity provider fields are set correctly, or not set at all
+func (r *ClusterSettingsResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var data ClusterSettingsResourceModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Check if any of the identity provider fields are set
+	idpFieldsSet := !data.IdentityProvider.IsNull() ||
+		!data.IdentityProviderClientId.IsNull() ||
+		!data.IdentityProviderClientSecret.IsNull() ||
+		!data.IdentityProviderUrl.IsNull() ||
+		!data.AuthenticateServiceUrl.IsNull()
+
+	// If any field is set, all must be set
+	if idpFieldsSet {
+		if data.IdentityProvider.IsNull() ||
+			data.IdentityProviderClientId.IsNull() ||
+			data.IdentityProviderClientSecret.IsNull() ||
+			data.IdentityProviderUrl.IsNull() ||
+			data.AuthenticateServiceUrl.IsNull() {
+			resp.Diagnostics.AddError(
+				"Invalid Identity Provider Configuration",
+				"When configuring a custom identity provider, all related fields (identity_provider, " +
+				"identity_provider_client_id, identity_provider_client_secret, identity_provider_url, authenticate_service_url) must be provided.",
+			)
+		}
+	}
+}
+
 // Configure sets up the ClusterSettingsResource with provider-specific data
 func (r *ClusterSettingsResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	// Check if provider data is available
@@ -220,6 +253,16 @@ func (r *ClusterSettingsResource) Create(ctx context.Context, req resource.Creat
 		return
 	}
 
+	// Explicitly call ValidateConfig
+	validateResp := &resource.ValidateConfigResponse{
+		Diagnostics: resp.Diagnostics,
+	}
+	r.ValidateConfig(ctx, resource.ValidateConfigRequest{Config: req.Config}, validateResp)
+	resp.Diagnostics = validateResp.Diagnostics
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	log.Printf("[DEBUG] Creating cluster settings for cluster: %s", plan.ID.ValueString())
 
 	// Convert the plan to a CreateClusterSettingsRequest
@@ -241,7 +284,6 @@ func (r *ClusterSettingsResource) Create(ctx context.Context, req resource.Creat
 	resp.Diagnostics.Append(diags...)
 }
 
-// Read handles the reading of cluster settings from the API and updates the Terraform state
 func (r *ClusterSettingsResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	// Initialize a variable to hold the current state
 	var state ClusterSettingsResourceModel
@@ -256,7 +298,7 @@ func (r *ClusterSettingsResource) Read(ctx context.Context, req resource.ReadReq
 	log.Printf("[DEBUG] Reading cluster settings for cluster: %s", id)
 
 	// Call the API to get the current cluster settings
-	settings, err := r.getClusterSettings(ctx, id)
+	apiSettings, err := r.getClusterSettings(ctx, id)
 	if err != nil {
 		// If the settings are not found, remove the resource from the state
 		if strings.Contains(err.Error(), "settings not found") {
@@ -269,8 +311,60 @@ func (r *ClusterSettingsResource) Read(ctx context.Context, req resource.ReadReq
 	}
 
 	// Update the state with the fetched settings
-	updateClusterSettingsResourceModel(&state, settings)
+	state.Address = types.StringValue(apiSettings.Address)
+	state.AutoApplyChangesets = types.BoolValue(apiSettings.AutoApplyChangesets)
+	state.CookieExpire = types.StringValue(apiSettings.CookieExpire)
+	state.CookieHttpOnly = types.BoolValue(apiSettings.CookieHttpOnly)
+	state.CookieName = types.StringValue(apiSettings.CookieName)
+	state.DefaultUpstreamTimeout = types.StringValue(apiSettings.DefaultUpstreamTimeout)
+	state.DNSLookupFamily = types.StringValue(apiSettings.DNSLookupFamily)
+	state.LogLevel = types.StringValue(apiSettings.LogLevel)
+	state.PassIdentityHeaders = types.BoolValue(apiSettings.PassIdentityHeaders)
+	state.SkipXffAppend = types.BoolValue(apiSettings.SkipXffAppend)
+	state.TimeoutIdle = types.StringValue(apiSettings.TimeoutIdle)
+	state.TimeoutRead = types.StringValue(apiSettings.TimeoutRead)
+	state.TimeoutWrite = types.StringValue(apiSettings.TimeoutWrite)
+	state.TracingSampleRate = types.Float64Value(apiSettings.TracingSampleRate)
+
+	// Handle potentially null values
+	if apiSettings.AuthenticateServiceUrl != "" {
+		state.AuthenticateServiceUrl = types.StringValue(apiSettings.AuthenticateServiceUrl)
+	} else {
+		state.AuthenticateServiceUrl = types.StringNull()
+	}
+
+	if apiSettings.IdentityProvider != "" {
+		state.IdentityProvider = types.StringValue(apiSettings.IdentityProvider)
+	} else {
+		state.IdentityProvider = types.StringNull()
+	}
+
+	if apiSettings.IdentityProviderClientId != "" {
+		state.IdentityProviderClientId = types.StringValue(apiSettings.IdentityProviderClientId)
+	} else {
+		state.IdentityProviderClientId = types.StringNull()
+	}
+
+	if apiSettings.IdentityProviderClientSecret != nil {
+		state.IdentityProviderClientSecret = types.StringValue(*apiSettings.IdentityProviderClientSecret)
+	} else {
+		state.IdentityProviderClientSecret = types.StringNull()
+	}
+
+	if apiSettings.IdentityProviderUrl != "" {
+		state.IdentityProviderUrl = types.StringValue(apiSettings.IdentityProviderUrl)
+	} else {
+		state.IdentityProviderUrl = types.StringNull()
+	}
+
+	if apiSettings.ProxyLogLevel != "" {
+		state.ProxyLogLevel = types.StringValue(apiSettings.ProxyLogLevel)
+	} else {
+		state.ProxyLogLevel = types.StringNull()
+	}
+
 	// Ensure the ID in the state matches the one from the API
+	state.ID = types.StringValue(id)
 
 	// Set the updated state
 	diags = resp.State.Set(ctx, &state)
@@ -286,6 +380,16 @@ func (r *ClusterSettingsResource) Update(ctx context.Context, req resource.Updat
 	// Retrieve the planned state from the UpdateRequest
 	diags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Validate the configuration
+	validateResp := &resource.ValidateConfigResponse{
+		Diagnostics: resp.Diagnostics,
+	}
+	r.ValidateConfig(ctx, resource.ValidateConfigRequest{Config: req.Config}, validateResp)
+	resp.Diagnostics = validateResp.Diagnostics
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -558,7 +662,12 @@ func updateClusterSettingsResourceModel(model *ClusterSettingsResourceModel, set
 	model.DNSLookupFamily = types.StringValue(settings.DNSLookupFamily)
 	model.IdentityProvider = types.StringValue(settings.IdentityProvider)
 	model.IdentityProviderClientId = types.StringValue(settings.IdentityProviderClientId)
-	model.IdentityProviderClientSecret = types.StringValue(settings.IdentityProviderClientSecret)
+	// model.IdentityProviderClientSecret = types.StringValue(settings.IdentityProviderClientSecret)
+	if settings.IdentityProviderClientSecret != nil {
+		model.IdentityProviderClientSecret = types.StringValue(*settings.IdentityProviderClientSecret)
+	} else {
+		model.IdentityProviderClientSecret = types.StringNull()
+	}
 	model.IdentityProviderUrl = types.StringValue(settings.IdentityProviderUrl)
 	model.LogLevel = types.StringValue(settings.LogLevel)
 	model.PassIdentityHeaders = types.BoolValue(settings.PassIdentityHeaders)
@@ -598,28 +707,44 @@ func createClusterSettingsRequest(model ClusterSettingsResourceModel) CreateClus
 
 // updateClusterSettingsRequest creates an UpdateClusterSettingsRequest from the ClusterSettingsResourceModel
 func updateClusterSettingsRequest(model ClusterSettingsResourceModel) UpdateClusterSettingsRequest {
-	return UpdateClusterSettingsRequest{
-		Address:                   model.Address.ValueString(),
-		AuthenticateServiceUrl:    model.AuthenticateServiceUrl.ValueString(),
-		AutoApplyChangesets:       model.AutoApplyChangesets.ValueBool(),
-		CookieExpire:              model.CookieExpire.ValueString(),
-		CookieHttpOnly:            model.CookieHttpOnly.ValueBool(),
-		CookieName:                model.CookieName.ValueString(),
-		DefaultUpstreamTimeout:    model.DefaultUpstreamTimeout.ValueString(),
-		DNSLookupFamily:           model.DNSLookupFamily.ValueString(),
-		IdentityProvider:          model.IdentityProvider.ValueString(),
-		IdentityProviderClientId:  model.IdentityProviderClientId.ValueString(),
-		IdentityProviderClientSecret: model.IdentityProviderClientSecret.ValueString(),
-		IdentityProviderUrl:       model.IdentityProviderUrl.ValueString(),
-		LogLevel:                  model.LogLevel.ValueString(),
-		PassIdentityHeaders:       model.PassIdentityHeaders.ValueBool(),
-		ProxyLogLevel:             model.ProxyLogLevel.ValueString(),
-		SkipXffAppend:             model.SkipXffAppend.ValueBool(),
-		TimeoutIdle:               model.TimeoutIdle.ValueString(),
-		TimeoutRead:               model.TimeoutRead.ValueString(),
-		TimeoutWrite:              model.TimeoutWrite.ValueString(),
-		TracingSampleRate:         model.TracingSampleRate.ValueFloat64(),
+	req := UpdateClusterSettingsRequest{
+		Address:               model.Address.ValueString(),
+		AutoApplyChangesets:   model.AutoApplyChangesets.ValueBool(),
+		CookieExpire:          model.CookieExpire.ValueString(),
+		CookieHttpOnly:        model.CookieHttpOnly.ValueBool(),
+		CookieName:            model.CookieName.ValueString(),
+		DefaultUpstreamTimeout: model.DefaultUpstreamTimeout.ValueString(),
+		DNSLookupFamily:       model.DNSLookupFamily.ValueString(),
+		LogLevel:              model.LogLevel.ValueString(),
+		PassIdentityHeaders:   model.PassIdentityHeaders.ValueBool(),
+		SkipXffAppend:         model.SkipXffAppend.ValueBool(),
+		TimeoutIdle:           model.TimeoutIdle.ValueString(),
+		TimeoutRead:           model.TimeoutRead.ValueString(),
+		TimeoutWrite:          model.TimeoutWrite.ValueString(),
+		TracingSampleRate:     model.TracingSampleRate.ValueFloat64(),
 	}
+
+	if !model.AuthenticateServiceUrl.IsNull() {
+		req.AuthenticateServiceUrl = model.AuthenticateServiceUrl.ValueString()
+	}
+	if !model.IdentityProvider.IsNull() {
+		req.IdentityProvider = model.IdentityProvider.ValueString()
+	}
+	if !model.IdentityProviderClientId.IsNull() {
+		req.IdentityProviderClientId = model.IdentityProviderClientId.ValueString()
+	}
+	if !model.IdentityProviderClientSecret.IsNull() {
+		value := model.IdentityProviderClientSecret.ValueString()
+		req.IdentityProviderClientSecret = &value
+	}
+	if !model.IdentityProviderUrl.IsNull() {
+		req.IdentityProviderUrl = model.IdentityProviderUrl.ValueString()
+	}
+	if !model.ProxyLogLevel.IsNull() {
+		req.ProxyLogLevel = model.ProxyLogLevel.ValueString()
+	}
+
+	return req
 }
 
 // API data structures
@@ -661,7 +786,7 @@ type UpdateClusterSettingsRequest struct {
 	DNSLookupFamily           string  `json:"dnsLookupFamily,omitempty"`
 	IdentityProvider          string  `json:"identityProvider,omitempty"`
 	IdentityProviderClientId  string  `json:"identityProviderClientId,omitempty"`
-	IdentityProviderClientSecret string `json:"identityProviderClientSecret,omitempty"`
+	IdentityProviderClientSecret *string `json:"identityProviderClientSecret,omitempty"`
 	IdentityProviderUrl       string  `json:"identityProviderUrl,omitempty"`
 	LogLevel                  string  `json:"logLevel,omitempty"`
 	PassIdentityHeaders       bool    `json:"passIdentityHeaders"`
@@ -686,7 +811,7 @@ type ClusterSettings struct {
 	DNSLookupFamily           string  `json:"dnsLookupFamily"`
 	IdentityProvider          string  `json:"identityProvider"`
 	IdentityProviderClientId  string  `json:"identityProviderClientId"`
-	IdentityProviderClientSecret string `json:"identityProviderClientSecret"`
+	IdentityProviderClientSecret *string `json:"identityProviderClientSecret"`
 	IdentityProviderUrl       string  `json:"identityProviderUrl"`
 	LogLevel                  string  `json:"logLevel"`
 	PassIdentityHeaders       bool    `json:"passIdentityHeaders"`
