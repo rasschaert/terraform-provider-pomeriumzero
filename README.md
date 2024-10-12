@@ -17,7 +17,6 @@ terraform {
 provider "pomeriumzero" {
   # Get an API token at https://console.pomerium.app/app/management/api-tokens
   api_token           = var.pomerium_zero_api_token
-  organization_name = "personal"
 }
 
 ```

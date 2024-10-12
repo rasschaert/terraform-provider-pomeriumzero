@@ -54,7 +54,6 @@ type pomeriumZeroProvider struct {
 // pomeriumZeroProviderModel describes the provider data model.
 type pomeriumZeroProviderModel struct {
 	APIToken   types.String `tfsdk:"api_token"`
-	OrganizationName types.String `tfsdk:"organization_name"`
 }
 
 // Metadata returns the provider type name.
@@ -72,10 +71,6 @@ func (p *pomeriumZeroProvider) Schema(_ context.Context, _ provider.SchemaReques
 				Required:    true,
 				Sensitive:   true,
 				Description: "The API token for authenticating with Pomerium Zero",
-			},
-			"organization_name": schema.StringAttribute{
-				Required:    true,
-				Description: "The name of the organization in Pomerium Zero",
 			},
 		},
 	}
@@ -109,15 +104,6 @@ func (p *pomeriumZeroProvider) Configure(ctx context.Context, req provider.Confi
 		return
 	}
 
-	if config.OrganizationName.IsNull() {
-		log.Println("Organization Name is null")
-		resp.Diagnostics.AddError(
-			"Missing Organization Name Configuration",
-			"The organization name is required for Pomerium Zero.",
-		)
-		return
-	}
-
 	p.client = &http.Client{
 		Timeout: time.Second * 10,
 	}
@@ -139,14 +125,14 @@ func (p *pomeriumZeroProvider) Configure(ctx context.Context, req provider.Confi
 	log.Println("Token obtained successfully")
 
 	log.Println("Getting organization ID")
-	orgID, err := p.getOrganizationID(ctx, config.OrganizationName.ValueString())
+	orgID, err := p.getOrganizationID(ctx)
 	if err != nil {
 		log.Println("Error getting organization ID:", err)
 
 		resp.Diagnostics.AddError(
 			"Unable to Fetch Organization ID",
 			"An unexpected error occurred when fetching the organization ID. "+
-				"Please check your organization name and try again.\n\n"+
+				"Please check your API token and try again.\n\n"+
 				"Error: "+err.Error(),
 		)
 		return
@@ -192,8 +178,8 @@ func (p *pomeriumZeroProvider) getToken(ctx context.Context, apiToken string) (s
 }
 
 // Lookup the organization ID by name.
-func (p *pomeriumZeroProvider) getOrganizationID(ctx context.Context, orgName string) (string, error) {
-	log.Printf("Fetching organization ID for name: %s", orgName)
+func (p *pomeriumZeroProvider) getOrganizationID(ctx context.Context) (string, error) {
+	log.Println("Fetching organization ID")
 
 	req, err := http.NewRequestWithContext(ctx, "GET", organizationsEndpoint, nil)
 	if err != nil {
@@ -217,8 +203,7 @@ func (p *pomeriumZeroProvider) getOrganizationID(ctx context.Context, orgName st
 	}
 
 	var organizations []struct {
-		ID   string `json:"id"`
-		Name string `json:"name"`
+		ID string `json:"id"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&organizations); err != nil {
@@ -226,18 +211,12 @@ func (p *pomeriumZeroProvider) getOrganizationID(ctx context.Context, orgName st
 		return "", err
 	}
 
-	log.Printf("Found %d organizations", len(organizations))
-
-	for _, org := range organizations {
-		log.Printf("Checking organization: %s", org.Name)
-		if org.Name == orgName {
-			log.Printf("Found matching organization with ID: %s", org.ID)
-			return org.ID, nil
-		}
+	if len(organizations) != 1 {
+		log.Println("Unexpected number of organizations returned")
+		return "", fmt.Errorf("unexpected number of organizations returned")
 	}
 
-	log.Printf("Organization with name '%s' not found", orgName)
-	return "", fmt.Errorf("organization with name '%s' not found", orgName)
+	return organizations[0].ID, nil
 }
 
 // DataSources defines the data sources implemented in the provider.

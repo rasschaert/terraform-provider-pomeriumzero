@@ -18,4 +18,3 @@ description: |-
 ### Required
 
 - `api_token` (String, Sensitive) The API token for authenticating with Pomerium Zero
-- `organization_name` (String) The name of the organization in Pomerium Zero
