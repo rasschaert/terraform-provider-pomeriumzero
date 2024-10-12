@@ -444,8 +444,12 @@ func (r *PolicyResource) deletePolicy(ctx context.Context, policyID string) erro
 
 // createPolicyRequest creates a CreatePolicyRequest from a PolicyResourceModel
 func createPolicyRequest(model PolicyResourceModel) CreatePolicyRequest {
-	var ppl map[string]interface{}
-	json.Unmarshal([]byte(model.PPL.ValueString()), &ppl)
+	var ppl interface{}
+	err := json.Unmarshal([]byte(model.PPL.ValueString()), &ppl)
+	if err != nil {
+		// Handle error (log it or return an error)
+		log.Printf("[ERROR] Failed to unmarshal PPL: %v", err)
+	}
 
 	return CreatePolicyRequest{
 		Name:        model.Name.ValueString(),
@@ -460,8 +464,12 @@ func createPolicyRequest(model PolicyResourceModel) CreatePolicyRequest {
 
 // updatePolicyRequest creates an UpdatePolicyRequest from a PolicyResourceModel
 func updatePolicyRequest(model PolicyResourceModel) UpdatePolicyRequest {
-	var ppl map[string]interface{}
-	json.Unmarshal([]byte(model.PPL.ValueString()), &ppl)
+	var ppl interface{}
+	err := json.Unmarshal([]byte(model.PPL.ValueString()), &ppl)
+	if err != nil {
+		// Handle error (log it or return an error)
+		log.Printf("[ERROR] Failed to unmarshal PPL: %v", err)
+	}
 
 	return UpdatePolicyRequest{
 		NamespaceID: model.NamespaceID.ValueString(),
@@ -506,7 +514,7 @@ type CreatePolicyRequest struct {
 	Enforced    bool                   `json:"enforced"`
 	Explanation string                 `json:"explanation"`
 	NamespaceID string                 `json:"namespaceId"`
-	PPL         map[string]interface{} `json:"ppl"`
+	PPL         interface{}            `json:"ppl"`
 	Remediation string                 `json:"remediation"`
 }
 
@@ -515,10 +523,10 @@ type UpdatePolicyRequest struct {
 	NamespaceID string                 `json:"namespaceId"`
 	Name        string                 `json:"name"`
 	Enforced    bool                   `json:"enforced"`
-	PPL         map[string]interface{} `json:"ppl"`
-	Description string                 `json:"description,omitempty"`
-	Explanation string                 `json:"explanation,omitempty"`
-	Remediation string                 `json:"remediation,omitempty"`
+	PPL         interface{}            `json:"ppl"`
+	Description string                 `json:"description"`
+	Explanation string                 `json:"explanation"`
+	Remediation string                 `json:"remediation"`
 }
 
 // Policy represents a Pomerium Zero policy
