@@ -229,8 +229,9 @@ func (p *pomeriumZeroProvider) DataSources(_ context.Context) []func() datasourc
 // Resources defines the resources implemented in the provider.
 func (p *pomeriumZeroProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
+		NewClusterResource,
+		NewClusterSettingsResource,
 		NewPolicyResource,
 		NewRouteResource,
-		NewClusterSettingsResource,
 	}
 }

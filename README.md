@@ -9,7 +9,6 @@ terraform {
   required_providers {
     pomeriumzero = {
       source  = "rasschaert/pomeriumzero"
-      version = "1.0.0"
     }
   }
 }
@@ -31,6 +30,8 @@ This can be used to reference the cluster ID for managing the cluster configurat
 
 It can also be used to reference the namespace ID for creating `pomeriumzero_route` and `pomeriumzero_policy` resources on this cluster.
 
+This may be useful if you're managing `pomeriumzero_route` or `pomeriumzero_policy` resources in a terraform state that does not contain a `pomeriumzero_cluster` resource.
+
 ```hcl
 data "pomeriumzero_cluster" "default" {
   name = "gifted-nightingale-1337"
@@ -39,6 +40,22 @@ data "pomeriumzero_cluster" "default" {
 ```
 
 ## Resources
+
+### pomeriumzero_cluster
+
+You can use this resource to change the name of your Pomerium Zero cluster.
+
+This resource can be used to reference the cluster ID for managing the cluster configuration in a `pomeriumzero_cluster_settings` resource.
+
+It can also be used to reference the namespace ID for creating `pomeriumzero_route` and `pomeriumzero_policy` resources on this cluster.
+
+```hcl
+resource "pomeriumzero_cluster" "default" {
+  name = "gifted-nightingale-1337"
+  domain = "gifted-nightingale-1337"
+}
+
+```
 
 ### pomeriumzero_cluster_settings
 

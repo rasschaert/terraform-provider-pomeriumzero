@@ -3,12 +3,12 @@
 page_title: "pomeriumzero_cluster_settings Resource - terraform-provider-pomeriumzero"
 subcategory: ""
 description: |-
-  Manages Pomerium Zero Cluster Settings.
+  Manages settings for a Pomerium Zero Cluster. This resource allows you to configure various aspects of your cluster, including authentication, timeouts, and logging.
 ---
 
 # pomeriumzero_cluster_settings (Resource)
 
-Manages Pomerium Zero Cluster Settings.
+Manages settings for a Pomerium Zero Cluster. This resource allows you to configure various aspects of your cluster, including authentication, timeouts, and logging.
 
 
 
@@ -17,7 +17,7 @@ Manages Pomerium Zero Cluster Settings.
 
 ### Optional
 
-- `address` (String) The address of the Pomerium Zero cluster.
+- `address` (String) The address of the Pomerium Zero cluster. Typically set to ':443' for HTTPS traffic.
 - `authenticate_service_url` (String) The URL of the authentication service (required if using custom IDP).
 - `auto_apply_changesets` (Boolean) Whether to automatically apply changesets.
 - `cookie_expire` (String) The expiration time for cookies.
@@ -40,4 +40,4 @@ Manages Pomerium Zero Cluster Settings.
 
 ### Read-Only
 
-- `id` (String) The unique identifier of the cluster settings.
+- `id` (String) The unique identifier of the cluster settings. This corresponds to the cluster ID.

@@ -70,20 +70,20 @@ func (r *ClusterSettingsResource) Metadata(_ context.Context, req resource.Metad
 // to interact with the Pomerium Zero Cluster Settings resource.
 func (r *ClusterSettingsResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = resource_schema.Schema{
-		MarkdownDescription: "Manages Pomerium Zero Cluster Settings.",
+		MarkdownDescription: "Manages settings for a Pomerium Zero Cluster. This resource allows you to configure various aspects of your cluster, including authentication, timeouts, and logging.",
 		Attributes: map[string]resource_schema.Attribute{
 			// ID is a computed attribute that uniquely identifies the cluster settings
 			"id": resource_schema.StringAttribute{
-				Computed: true,
+				MarkdownDescription: "The unique identifier of the cluster settings. This corresponds to the cluster ID.",
+				Computed:            true,
 				PlanModifiers: []resource_schema_planmodifier.String{
 					resource_schema_stringplanmodifier.UseStateForUnknown(),
 				},
-				MarkdownDescription: "The unique identifier of the cluster settings.",
 			},
 			// Address specifies the location of the Pomerium Zero cluster
 			"address": resource_schema.StringAttribute{
 				Optional:            true,
-				MarkdownDescription: "The address of the Pomerium Zero cluster.",
+				MarkdownDescription: "The address of the Pomerium Zero cluster. Typically set to ':443' for HTTPS traffic.",
 			},
 			// AutoApplyChangesets determines if changes should be applied automatically
 			"auto_apply_changesets": resource_schema.BoolAttribute{
@@ -193,6 +193,11 @@ func (r *ClusterSettingsResource) ValidateConfig(ctx context.Context, req resour
 
 	if resp.Diagnostics.HasError() {
 		return
+	}
+
+	// Normalize ProxyLogLevel
+	if !data.ProxyLogLevel.IsNull() && data.ProxyLogLevel.ValueString() == "" {
+		data.ProxyLogLevel = types.StringNull()
 	}
 
 	// Check if any of the identity provider fields are set
@@ -373,10 +378,10 @@ func (r *ClusterSettingsResource) Read(ctx context.Context, req resource.ReadReq
 	// Special handling for ProxyLogLevel
 	// The API may return null for this field, but doesn't accept null as a value when updating
 	// If it's an empty string from the API, we set it to null in the Terraform state
-	if apiSettings.ProxyLogLevel != "" {
-		state.ProxyLogLevel = types.StringValue(apiSettings.ProxyLogLevel)
-	} else {
+	if apiSettings.ProxyLogLevel == "" {
 		state.ProxyLogLevel = types.StringNull()
+	} else {
+		state.ProxyLogLevel = types.StringValue(apiSettings.ProxyLogLevel)
 	}
 
 	// Ensure the ID in the state matches the one from the API
@@ -398,6 +403,11 @@ func (r *ClusterSettingsResource) Update(ctx context.Context, req resource.Updat
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
+	}
+
+	// Normalize ProxyLogLevel in the plan
+	if !plan.ProxyLogLevel.IsNull() && plan.ProxyLogLevel.ValueString() == "" {
+		plan.ProxyLogLevel = types.StringNull()
 	}
 
 	// Validate the configuration
@@ -687,7 +697,13 @@ func updateClusterSettingsResourceModel(model *ClusterSettingsResourceModel, set
 	model.IdentityProviderUrl = types.StringValue(settings.IdentityProviderUrl)
 	model.LogLevel = types.StringValue(settings.LogLevel)
 	model.PassIdentityHeaders = types.BoolValue(settings.PassIdentityHeaders)
-	model.ProxyLogLevel = types.StringValue(settings.ProxyLogLevel)
+	// Special handling for ProxyLogLevel
+	if settings.ProxyLogLevel == "" {
+		model.ProxyLogLevel = types.StringNull()
+	} else {
+		model.ProxyLogLevel = types.StringValue(settings.ProxyLogLevel)
+	}
+	// Note: If ProxyLogLevel is null or an empty string, it will be omitted from the request
 	model.SkipXffAppend = types.BoolValue(settings.SkipXffAppend)
 	model.TimeoutIdle = types.StringValue(settings.TimeoutIdle)
 	model.TimeoutRead = types.StringValue(settings.TimeoutRead)
