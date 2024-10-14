@@ -20,6 +20,7 @@ import (
 var _ resource.Resource = &PolicyResource{}
 var _ resource.ResourceWithImportState = &PolicyResource{}
 
+// NewPolicyResource creates a new PolicyResource.
 func NewPolicyResource() resource.Resource {
 	return &PolicyResource{}
 }
@@ -301,7 +302,9 @@ func (r *PolicyResource) ImportState(ctx context.Context, req resource.ImportSta
 // API helper functions
 // These functions interact with the Pomerium Zero API to create, read, update, and delete policies
 
+// createPolicy creates a new policy in Pomerium Zero
 func (r *PolicyResource) createPolicy(ctx context.Context, policy CreatePolicyRequest) (*Policy, error) {
+	// Construct the URL for the API endpoint
 	url := fmt.Sprintf("%s/organizations/%s/policies", apiBaseURL, r.organizationID)
 	body, err := json.Marshal(policy)
 	if err != nil {
@@ -310,6 +313,7 @@ func (r *PolicyResource) createPolicy(ctx context.Context, policy CreatePolicyRe
 
 	log.Printf("[DEBUG] Create policy request body: %s", string(body))
 
+	// Create a new HTTP POST request with the given context
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(body))
 	if err != nil {
 		return nil, fmt.Errorf("error creating request: %w", err)
@@ -343,14 +347,18 @@ func (r *PolicyResource) createPolicy(ctx context.Context, policy CreatePolicyRe
 	return &createdPolicy, nil
 }
 
+// getPolicy retrieves a policy from Pomerium Zero by its ID
 func (r *PolicyResource) getPolicy(ctx context.Context, policyID string) (*Policy, error) {
+	// Construct the URL for the API endpoint
 	url := fmt.Sprintf("%s/organizations/%s/policies/%s", apiBaseURL, r.organizationID, policyID)
 
+	// Create a new HTTP GET request with the given context
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error creating request: %w", err)
 	}
 
+	// Set the necessary headers for authentication and content type
 	req.Header.Set("Authorization", "Bearer "+r.token)
 	req.Header.Set("Content-Type", "application/json")
 
@@ -372,23 +380,29 @@ func (r *PolicyResource) getPolicy(ctx context.Context, policyID string) (*Polic
 	return &policy, nil
 }
 
+// updatePolicy updates a policy in Pomerium Zero
 func (r *PolicyResource) updatePolicy(ctx context.Context, policyID string, policy UpdatePolicyRequest) (*Policy, error) {
 	log.Printf("[DEBUG] Updating policy with ID: %s", policyID)
+	// Construct the URL for the API endpoint
 	url := fmt.Sprintf("%s/organizations/%s/policies/%s", apiBaseURL, r.organizationID, policyID)
 
+	// Marshal the policy data into a JSON body
 	body, err := json.Marshal(policy)
 	if err != nil {
 		return nil, fmt.Errorf("error marshaling policy: %w", err)
 	}
 
+	// Create a new HTTP PUT request with the given context
 	req, err := http.NewRequestWithContext(ctx, "PUT", url, bytes.NewBuffer(body))
 	if err != nil {
 		return nil, fmt.Errorf("error creating request: %w", err)
 	}
 
+	// Set the necessary headers for authentication and content type
 	req.Header.Set("Authorization", "Bearer "+r.token)
 	req.Header.Set("Content-Type", "application/json")
 
+	// Send the HTTP request
 	resp, err := r.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("error making request: %w", err)
@@ -416,16 +430,20 @@ func (r *PolicyResource) updatePolicy(ctx context.Context, policyID string, poli
 	return &updatedPolicy, nil
 }
 
+// deletePolicy removes a policy from Pomerium Zero
 func (r *PolicyResource) deletePolicy(ctx context.Context, policyID string) error {
+	// Construct the URL for the API endpoint
 	url := fmt.Sprintf("%s/organizations/%s/policies/%s", apiBaseURL, r.organizationID, policyID)
 
+	// Create a new HTTP DELETE request with the given context
 	req, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
 	if err != nil {
 		return err
 	}
-
+	// Set the necessary headers for authentication
 	req.Header.Set("Authorization", "Bearer "+r.token)
 
+	// Send the HTTP request
 	resp, err := r.client.Do(req)
 	if err != nil {
 		return err
@@ -444,10 +462,16 @@ func (r *PolicyResource) deletePolicy(ctx context.Context, policyID string) erro
 
 // createPolicyRequest creates a CreatePolicyRequest from a PolicyResourceModel
 func createPolicyRequest(model PolicyResourceModel) CreatePolicyRequest {
+	// Declare a variable to hold the unmarshaled PPL data
 	var ppl interface{}
+
+	// Attempt to unmarshal the PPL string from the model into the ppl variable
 	err := json.Unmarshal([]byte(model.PPL.ValueString()), &ppl)
+
+	// Check if there was an error during unmarshaling
 	if err != nil {
-		// Handle error (log it or return an error)
+		// Log the error if unmarshaling fails
+		// Note: Consider handling this error more robustly in production code
 		log.Printf("[ERROR] Failed to unmarshal PPL: %v", err)
 	}
 
@@ -509,24 +533,24 @@ func stringOrEmpty(s string) string {
 
 // CreatePolicyRequest represents the request body for creating a policy
 type CreatePolicyRequest struct {
-	Name        string                 `json:"name"`
-	Description string                 `json:"description"`
-	Enforced    bool                   `json:"enforced"`
-	Explanation string                 `json:"explanation"`
-	NamespaceID string                 `json:"namespaceId"`
-	PPL         interface{}            `json:"ppl"`
-	Remediation string                 `json:"remediation"`
+	Name        string      `json:"name"`
+	Description string      `json:"description"`
+	Enforced    bool        `json:"enforced"`
+	Explanation string      `json:"explanation"`
+	NamespaceID string      `json:"namespaceId"`
+	PPL         interface{} `json:"ppl"`
+	Remediation string      `json:"remediation"`
 }
 
 // UpdatePolicyRequest represents the request body for updating a policy
 type UpdatePolicyRequest struct {
-	NamespaceID string                 `json:"namespaceId"`
-	Name        string                 `json:"name"`
-	Enforced    bool                   `json:"enforced"`
-	PPL         interface{}            `json:"ppl"`
-	Description string                 `json:"description"`
-	Explanation string                 `json:"explanation"`
-	Remediation string                 `json:"remediation"`
+	NamespaceID string      `json:"namespaceId"`
+	Name        string      `json:"name"`
+	Enforced    bool        `json:"enforced"`
+	PPL         interface{} `json:"ppl"`
+	Description string      `json:"description"`
+	Explanation string      `json:"explanation"`
+	Remediation string      `json:"remediation"`
 }
 
 // Policy represents a Pomerium Zero policy

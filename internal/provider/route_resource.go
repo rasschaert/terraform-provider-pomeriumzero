@@ -20,7 +20,7 @@ import (
 
 // Ensure the implementation satisfies the expected interfaces.
 var (
-	_ resource.Resource              = &RouteResource{}
+	_ resource.Resource                = &RouteResource{}
 	_ resource.ResourceWithImportState = &RouteResource{}
 )
 
@@ -38,22 +38,22 @@ type RouteResource struct {
 
 // RouteResourceModel describes the resource data model.
 type RouteResourceModel struct {
-	ID                                       types.String `tfsdk:"id"`
-	Name                                     types.String `tfsdk:"name"`
-	NamespaceID                              types.String `tfsdk:"namespace_id"`
-	From                                     types.String `tfsdk:"from"`
-	To                                       types.List   `tfsdk:"to"`
-	AllowSpdy                                types.Bool   `tfsdk:"allow_spdy"`
-	AllowWebsockets                          types.Bool   `tfsdk:"allow_websockets"`
+	ID                                        types.String `tfsdk:"id"`
+	Name                                      types.String `tfsdk:"name"`
+	NamespaceID                               types.String `tfsdk:"namespace_id"`
+	From                                      types.String `tfsdk:"from"`
+	To                                        types.List   `tfsdk:"to"`
+	AllowSpdy                                 types.Bool   `tfsdk:"allow_spdy"`
+	AllowWebsockets                           types.Bool   `tfsdk:"allow_websockets"`
 	EnableGoogleCloudServerlessAuthentication types.Bool   `tfsdk:"enable_google_cloud_serverless_authentication"`
-	PassIdentityHeaders                      types.Bool   `tfsdk:"pass_identity_headers"`
-	PreserveHostHeader                       types.Bool   `tfsdk:"preserve_host_header"`
-	ShowErrorDetails                         types.Bool   `tfsdk:"show_error_details"`
-	TLSSkipVerify                            types.Bool   `tfsdk:"tls_skip_verify"`
-	TLSUpstreamAllowRenegotiation            types.Bool   `tfsdk:"tls_upstream_allow_renegotiation"`
-	PolicyIDs                                types.List   `tfsdk:"policy_ids"`
-	Prefix                                   types.String `tfsdk:"prefix"`
-	PrefixRewrite                            types.String `tfsdk:"prefix_rewrite"`
+	PassIdentityHeaders                       types.Bool   `tfsdk:"pass_identity_headers"`
+	PreserveHostHeader                        types.Bool   `tfsdk:"preserve_host_header"`
+	ShowErrorDetails                          types.Bool   `tfsdk:"show_error_details"`
+	TLSSkipVerify                             types.Bool   `tfsdk:"tls_skip_verify"`
+	TLSUpstreamAllowRenegotiation             types.Bool   `tfsdk:"tls_upstream_allow_renegotiation"`
+	PolicyIDs                                 types.List   `tfsdk:"policy_ids"`
+	Prefix                                    types.String `tfsdk:"prefix"`
+	PrefixRewrite                             types.String `tfsdk:"prefix_rewrite"`
 }
 
 // Metadata sets the resource type name for the RouteResource.
@@ -522,9 +522,9 @@ func createRouteRequest(model *RouteResourceModel) map[string]interface{} {
 		"from":        model.From.ValueString(),
 		"allowSpdy":   model.AllowSpdy.ValueBool(),
 		"enableGoogleCloudServerlessAuthentication": model.EnableGoogleCloudServerlessAuthentication.ValueBool(),
-		"showErrorDetails":              model.ShowErrorDetails.ValueBool(),
-		"tlsSkipVerify":                 model.TLSSkipVerify.ValueBool(),
-		"tlsUpstreamAllowRenegotiation": model.TLSUpstreamAllowRenegotiation.ValueBool(),
+		"showErrorDetails":                          model.ShowErrorDetails.ValueBool(),
+		"tlsSkipVerify":                             model.TLSSkipVerify.ValueBool(),
+		"tlsUpstreamAllowRenegotiation":             model.TLSUpstreamAllowRenegotiation.ValueBool(),
 	}
 
 	// Add 'to' field if it's not null

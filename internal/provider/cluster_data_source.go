@@ -15,6 +15,7 @@ import (
 // Ensure provider defined types fully satisfy framework interfaces.
 var _ datasource.DataSource = &ClusterDataSource{}
 
+// NewClusterDataSource creates a new ClusterDataSource.
 func NewClusterDataSource() datasource.DataSource {
 	return &ClusterDataSource{}
 }
@@ -36,7 +37,6 @@ type ClusterDataSourceModel struct {
 	AutoDetectIPAddress types.String `tfsdk:"auto_detect_ip_address"`
 	CreatedAt           types.String `tfsdk:"created_at"`
 	UpdatedAt           types.String `tfsdk:"updated_at"`
-
 }
 
 // Metadata sets the data source type name for the ClusterDataSource.
@@ -195,11 +195,13 @@ type Cluster struct {
 func (d *ClusterDataSource) GetClusters(ctx context.Context) ([]Cluster, error) {
 	url := fmt.Sprintf("https://console.pomerium.app/api/v0/organizations/%s/clusters", d.organizationID)
 
+	// Create a new HTTP request
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error creating request: %w", err)
 	}
 
+	// Set the request headers
 	req.Header.Set("Authorization", "Bearer "+d.token)
 	req.Header.Set("Content-Type", "application/json")
 

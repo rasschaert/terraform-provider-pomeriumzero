@@ -18,7 +18,7 @@ import (
 
 const (
 	// Base URL for version 0 of the Pomerium Zero API
-	apiBaseURL    = "https://console.pomerium.app/api/v0"
+	apiBaseURL = "https://console.pomerium.app/api/v0"
 	// Endpoint exhanging the API token for a JWT
 	tokenEndpoint = apiBaseURL + "/token"
 	// Endpoint for retrieving organization information
@@ -45,15 +45,15 @@ type pomeriumZeroProvider struct {
 	// version is set to the provider version on release, "dev" when the
 	// provider is built and ran locally, and "test" when running acceptance
 	// testing.
-	version string
-	client  *http.Client
-	token   string
+	version        string
+	client         *http.Client
+	token          string
 	organizationID string
 }
 
 // pomeriumZeroProviderModel describes the provider data model.
 type pomeriumZeroProviderModel struct {
-	APIToken   types.String `tfsdk:"api_token"`
+	APIToken types.String `tfsdk:"api_token"`
 }
 
 // Metadata returns the provider type name.
@@ -96,7 +96,7 @@ func (p *pomeriumZeroProvider) Configure(ctx context.Context, req provider.Confi
 	// log.Printf("Configuration: API Token: %s, Organization Name: %s", config.APIToken.ValueString(), config.OrganizationName.ValueString())
 
 	if config.APIToken.IsNull() {
-	log.Println("API Token is null")
+		log.Println("API Token is null")
 		resp.Diagnostics.AddError(
 			"Missing API Token Configuration",
 			"The API token is required to authenticate with Pomerium Zero.",

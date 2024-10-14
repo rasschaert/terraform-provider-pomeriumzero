@@ -22,6 +22,7 @@ import (
 var _ resource.Resource = &ClusterSettingsResource{}
 var _ resource.ResourceWithImportState = &ClusterSettingsResource{}
 
+// NewClusterSettingsResource creates a new ClusterSettingsResource.
 func NewClusterSettingsResource() resource.Resource {
 	return &ClusterSettingsResource{}
 }
@@ -35,27 +36,27 @@ type ClusterSettingsResource struct {
 
 // ClusterSettingsResourceModel describes the resource data model.
 type ClusterSettingsResourceModel struct {
-	ID                        types.String `tfsdk:"id"`
-	Address                   types.String `tfsdk:"address"`
-	AuthenticateServiceUrl    types.String `tfsdk:"authenticate_service_url"`
-	AutoApplyChangesets       types.Bool   `tfsdk:"auto_apply_changesets"`
-	CookieExpire              types.String `tfsdk:"cookie_expire"`
-	CookieHttpOnly            types.Bool   `tfsdk:"cookie_http_only"`
-	CookieName                types.String `tfsdk:"cookie_name"`
-	DefaultUpstreamTimeout    types.String `tfsdk:"default_upstream_timeout"`
-	DNSLookupFamily           types.String `tfsdk:"dns_lookup_family"`
-	IdentityProvider          types.String `tfsdk:"identity_provider"`
-	IdentityProviderClientId  types.String `tfsdk:"identity_provider_client_id"`
-	IdentityProviderClientSecret types.String `tfsdk:"identity_provider_client_secret"`
-	IdentityProviderUrl       types.String `tfsdk:"identity_provider_url"`
-	LogLevel                  types.String `tfsdk:"log_level"`
-	PassIdentityHeaders       types.Bool   `tfsdk:"pass_identity_headers"`
-	ProxyLogLevel             types.String `tfsdk:"proxy_log_level"`
-	SkipXffAppend             types.Bool   `tfsdk:"skip_xff_append"`
-	TimeoutIdle               types.String `tfsdk:"timeout_idle"`
-	TimeoutRead               types.String `tfsdk:"timeout_read"`
-	TimeoutWrite              types.String `tfsdk:"timeout_write"`
-	TracingSampleRate         types.Float64 `tfsdk:"tracing_sample_rate"`
+	ID                           types.String  `tfsdk:"id"`
+	Address                      types.String  `tfsdk:"address"`
+	AuthenticateServiceUrl       types.String  `tfsdk:"authenticate_service_url"`
+	AutoApplyChangesets          types.Bool    `tfsdk:"auto_apply_changesets"`
+	CookieExpire                 types.String  `tfsdk:"cookie_expire"`
+	CookieHttpOnly               types.Bool    `tfsdk:"cookie_http_only"`
+	CookieName                   types.String  `tfsdk:"cookie_name"`
+	DefaultUpstreamTimeout       types.String  `tfsdk:"default_upstream_timeout"`
+	DNSLookupFamily              types.String  `tfsdk:"dns_lookup_family"`
+	IdentityProvider             types.String  `tfsdk:"identity_provider"`
+	IdentityProviderClientId     types.String  `tfsdk:"identity_provider_client_id"`
+	IdentityProviderClientSecret types.String  `tfsdk:"identity_provider_client_secret"`
+	IdentityProviderUrl          types.String  `tfsdk:"identity_provider_url"`
+	LogLevel                     types.String  `tfsdk:"log_level"`
+	PassIdentityHeaders          types.Bool    `tfsdk:"pass_identity_headers"`
+	ProxyLogLevel                types.String  `tfsdk:"proxy_log_level"`
+	SkipXffAppend                types.Bool    `tfsdk:"skip_xff_append"`
+	TimeoutIdle                  types.String  `tfsdk:"timeout_idle"`
+	TimeoutRead                  types.String  `tfsdk:"timeout_read"`
+	TimeoutWrite                 types.String  `tfsdk:"timeout_write"`
+	TracingSampleRate            types.Float64 `tfsdk:"tracing_sample_rate"`
 }
 
 // Metadata sets the resource type name for the ClusterSettingsResource.
@@ -210,8 +211,8 @@ func (r *ClusterSettingsResource) ValidateConfig(ctx context.Context, req resour
 			data.AuthenticateServiceUrl.IsNull() {
 			resp.Diagnostics.AddError(
 				"Invalid Identity Provider Configuration",
-				"When configuring a custom identity provider, all related fields (identity_provider, " +
-				"identity_provider_client_id, identity_provider_client_secret, identity_provider_url, authenticate_service_url) must be provided.",
+				"When configuring a custom identity provider, all related fields (identity_provider, "+
+					"identity_provider_client_id, identity_provider_client_secret, identity_provider_url, authenticate_service_url) must be provided.",
 			)
 		}
 	}
@@ -284,6 +285,7 @@ func (r *ClusterSettingsResource) Create(ctx context.Context, req resource.Creat
 	resp.Diagnostics.Append(diags...)
 }
 
+// Read retrieves the current state of the ClusterSettingsResource
 func (r *ClusterSettingsResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	// Initialize a variable to hold the current state
 	var state ClusterSettingsResourceModel
@@ -376,7 +378,6 @@ func (r *ClusterSettingsResource) Read(ctx context.Context, req resource.ReadReq
 	} else {
 		state.ProxyLogLevel = types.StringNull()
 	}
-
 
 	// Ensure the ID in the state matches the one from the API
 	state.ID = types.StringValue(id)
@@ -697,26 +698,26 @@ func updateClusterSettingsResourceModel(model *ClusterSettingsResourceModel, set
 // createClusterSettingsRequest creates a CreateClusterSettingsRequest from the ClusterSettingsResourceModel
 func createClusterSettingsRequest(model ClusterSettingsResourceModel) CreateClusterSettingsRequest {
 	return CreateClusterSettingsRequest{
-		Address:                   model.Address.ValueString(),
-		AuthenticateServiceUrl:    model.AuthenticateServiceUrl.ValueString(),
-		AutoApplyChangesets:       model.AutoApplyChangesets.ValueBool(),
-		CookieExpire:              model.CookieExpire.ValueString(),
-		CookieHttpOnly:            model.CookieHttpOnly.ValueBool(),
-		CookieName:                model.CookieName.ValueString(),
-		DefaultUpstreamTimeout:    model.DefaultUpstreamTimeout.ValueString(),
-		DNSLookupFamily:           model.DNSLookupFamily.ValueString(),
-		IdentityProvider:          model.IdentityProvider.ValueString(),
-		IdentityProviderClientId:  model.IdentityProviderClientId.ValueString(),
+		Address:                      model.Address.ValueString(),
+		AuthenticateServiceUrl:       model.AuthenticateServiceUrl.ValueString(),
+		AutoApplyChangesets:          model.AutoApplyChangesets.ValueBool(),
+		CookieExpire:                 model.CookieExpire.ValueString(),
+		CookieHttpOnly:               model.CookieHttpOnly.ValueBool(),
+		CookieName:                   model.CookieName.ValueString(),
+		DefaultUpstreamTimeout:       model.DefaultUpstreamTimeout.ValueString(),
+		DNSLookupFamily:              model.DNSLookupFamily.ValueString(),
+		IdentityProvider:             model.IdentityProvider.ValueString(),
+		IdentityProviderClientId:     model.IdentityProviderClientId.ValueString(),
 		IdentityProviderClientSecret: model.IdentityProviderClientSecret.ValueString(),
-		IdentityProviderUrl:       model.IdentityProviderUrl.ValueString(),
-		LogLevel:                  model.LogLevel.ValueString(),
-		PassIdentityHeaders:       model.PassIdentityHeaders.ValueBool(),
-		ProxyLogLevel:             model.ProxyLogLevel.ValueString(),
-		SkipXffAppend:             model.SkipXffAppend.ValueBool(),
-		TimeoutIdle:               model.TimeoutIdle.ValueString(),
-		TimeoutRead:               model.TimeoutRead.ValueString(),
-		TimeoutWrite:              model.TimeoutWrite.ValueString(),
-		TracingSampleRate:         model.TracingSampleRate.ValueFloat64(),
+		IdentityProviderUrl:          model.IdentityProviderUrl.ValueString(),
+		LogLevel:                     model.LogLevel.ValueString(),
+		PassIdentityHeaders:          model.PassIdentityHeaders.ValueBool(),
+		ProxyLogLevel:                model.ProxyLogLevel.ValueString(),
+		SkipXffAppend:                model.SkipXffAppend.ValueBool(),
+		TimeoutIdle:                  model.TimeoutIdle.ValueString(),
+		TimeoutRead:                  model.TimeoutRead.ValueString(),
+		TimeoutWrite:                 model.TimeoutWrite.ValueString(),
+		TracingSampleRate:            model.TracingSampleRate.ValueFloat64(),
 	}
 }
 
@@ -724,20 +725,20 @@ func createClusterSettingsRequest(model ClusterSettingsResourceModel) CreateClus
 func updateClusterSettingsRequest(model ClusterSettingsResourceModel) UpdateClusterSettingsRequest {
 	// Initialize the request with non-nullable fields
 	req := UpdateClusterSettingsRequest{
-		Address:               model.Address.ValueString(),
-		AutoApplyChangesets:   model.AutoApplyChangesets.ValueBool(),
-		CookieExpire:          model.CookieExpire.ValueString(),
-		CookieHttpOnly:        model.CookieHttpOnly.ValueBool(),
-		CookieName:            model.CookieName.ValueString(),
+		Address:                model.Address.ValueString(),
+		AutoApplyChangesets:    model.AutoApplyChangesets.ValueBool(),
+		CookieExpire:           model.CookieExpire.ValueString(),
+		CookieHttpOnly:         model.CookieHttpOnly.ValueBool(),
+		CookieName:             model.CookieName.ValueString(),
 		DefaultUpstreamTimeout: model.DefaultUpstreamTimeout.ValueString(),
-		DNSLookupFamily:       model.DNSLookupFamily.ValueString(),
-		LogLevel:              model.LogLevel.ValueString(),
-		PassIdentityHeaders:   model.PassIdentityHeaders.ValueBool(),
-		SkipXffAppend:         model.SkipXffAppend.ValueBool(),
-		TimeoutIdle:           model.TimeoutIdle.ValueString(),
-		TimeoutRead:           model.TimeoutRead.ValueString(),
-		TimeoutWrite:          model.TimeoutWrite.ValueString(),
-		TracingSampleRate:     model.TracingSampleRate.ValueFloat64(),
+		DNSLookupFamily:        model.DNSLookupFamily.ValueString(),
+		LogLevel:               model.LogLevel.ValueString(),
+		PassIdentityHeaders:    model.PassIdentityHeaders.ValueBool(),
+		SkipXffAppend:          model.SkipXffAppend.ValueBool(),
+		TimeoutIdle:            model.TimeoutIdle.ValueString(),
+		TimeoutRead:            model.TimeoutRead.ValueString(),
+		TimeoutWrite:           model.TimeoutWrite.ValueString(),
+		TracingSampleRate:      model.TracingSampleRate.ValueFloat64(),
 	}
 
 	// For nullable fields, only include them in the request if they're not null
@@ -777,7 +778,6 @@ func updateClusterSettingsRequest(model ClusterSettingsResourceModel) UpdateClus
 	}
 	// Note: If ProxyLogLevel is null or an empty string, it will be omitted from the request
 
-
 	return req
 }
 
@@ -785,74 +785,74 @@ func updateClusterSettingsRequest(model ClusterSettingsResourceModel) UpdateClus
 // These structures represent the data exchanged with the Pomerium Zero API
 // CreateClusterSettingsRequest is used to create new cluster settings
 type CreateClusterSettingsRequest struct {
-	ID                        string  `json:"id"`
-	Address                   string  `json:"address,omitempty"`
-	AuthenticateServiceUrl    string  `json:"authenticateServiceUrl,omitempty"`
-	AutoApplyChangesets       bool    `json:"autoApplyChangesets,omitempty"`
-	CookieExpire              string  `json:"cookieExpire,omitempty"`
-	CookieHttpOnly            bool    `json:"cookieHttpOnly,omitempty"`
-	CookieName                string  `json:"cookieName,omitempty"`
-	DefaultUpstreamTimeout    string  `json:"defaultUpstreamTimeout,omitempty"`
-	DNSLookupFamily           string  `json:"dnsLookupFamily,omitempty"`
-	IdentityProvider          string  `json:"identityProvider,omitempty"`
-	IdentityProviderClientId  string  `json:"identityProviderClientId,omitempty"`
-	IdentityProviderClientSecret string `json:"identityProviderClientSecret,omitempty"`
-	IdentityProviderUrl       string  `json:"identityProviderUrl,omitempty"`
-	LogLevel                  string  `json:"logLevel,omitempty"`
-	PassIdentityHeaders       bool    `json:"passIdentityHeaders,omitempty"`
-	ProxyLogLevel             string  `json:"proxyLogLevel,omitempty"`
-	SkipXffAppend             bool    `json:"skipXffAppend,omitempty"`
-	TimeoutIdle               string  `json:"timeoutIdle,omitempty"`
-	TimeoutRead               string  `json:"timeoutRead,omitempty"`
-	TimeoutWrite              string  `json:"timeoutWrite,omitempty"`
-	TracingSampleRate         float64 `json:"tracingSampleRate,omitempty"`
+	ID                           string  `json:"id"`
+	Address                      string  `json:"address,omitempty"`
+	AuthenticateServiceUrl       string  `json:"authenticateServiceUrl,omitempty"`
+	AutoApplyChangesets          bool    `json:"autoApplyChangesets,omitempty"`
+	CookieExpire                 string  `json:"cookieExpire,omitempty"`
+	CookieHttpOnly               bool    `json:"cookieHttpOnly,omitempty"`
+	CookieName                   string  `json:"cookieName,omitempty"`
+	DefaultUpstreamTimeout       string  `json:"defaultUpstreamTimeout,omitempty"`
+	DNSLookupFamily              string  `json:"dnsLookupFamily,omitempty"`
+	IdentityProvider             string  `json:"identityProvider,omitempty"`
+	IdentityProviderClientId     string  `json:"identityProviderClientId,omitempty"`
+	IdentityProviderClientSecret string  `json:"identityProviderClientSecret,omitempty"`
+	IdentityProviderUrl          string  `json:"identityProviderUrl,omitempty"`
+	LogLevel                     string  `json:"logLevel,omitempty"`
+	PassIdentityHeaders          bool    `json:"passIdentityHeaders,omitempty"`
+	ProxyLogLevel                string  `json:"proxyLogLevel,omitempty"`
+	SkipXffAppend                bool    `json:"skipXffAppend,omitempty"`
+	TimeoutIdle                  string  `json:"timeoutIdle,omitempty"`
+	TimeoutRead                  string  `json:"timeoutRead,omitempty"`
+	TimeoutWrite                 string  `json:"timeoutWrite,omitempty"`
+	TracingSampleRate            float64 `json:"tracingSampleRate,omitempty"`
 }
 
 // UpdateClusterSettingsRequest is used to update existing cluster settings
 type UpdateClusterSettingsRequest struct {
-	Address                   string  `json:"address,omitempty"`
-	AuthenticateServiceUrl    string  `json:"authenticateServiceUrl,omitempty"`
-	AutoApplyChangesets       bool    `json:"autoApplyChangesets,omitempty"`
-	CookieExpire              string  `json:"cookieExpire,omitempty"`
-	CookieHttpOnly            bool    `json:"cookieHttpOnly,omitempty"`
-	CookieName                string  `json:"cookieName,omitempty"`
-	DefaultUpstreamTimeout    string  `json:"defaultUpstreamTimeout,omitempty"`
-	DNSLookupFamily           string  `json:"dnsLookupFamily,omitempty"`
-	IdentityProvider          string  `json:"identityProvider,omitempty"`
-	IdentityProviderClientId  string  `json:"identityProviderClientId,omitempty"`
+	Address                      string  `json:"address,omitempty"`
+	AuthenticateServiceUrl       string  `json:"authenticateServiceUrl,omitempty"`
+	AutoApplyChangesets          bool    `json:"autoApplyChangesets,omitempty"`
+	CookieExpire                 string  `json:"cookieExpire,omitempty"`
+	CookieHttpOnly               bool    `json:"cookieHttpOnly,omitempty"`
+	CookieName                   string  `json:"cookieName,omitempty"`
+	DefaultUpstreamTimeout       string  `json:"defaultUpstreamTimeout,omitempty"`
+	DNSLookupFamily              string  `json:"dnsLookupFamily,omitempty"`
+	IdentityProvider             string  `json:"identityProvider,omitempty"`
+	IdentityProviderClientId     string  `json:"identityProviderClientId,omitempty"`
 	IdentityProviderClientSecret *string `json:"identityProviderClientSecret,omitempty"`
-	IdentityProviderUrl       string  `json:"identityProviderUrl,omitempty"`
-	LogLevel                  string  `json:"logLevel,omitempty"`
-	PassIdentityHeaders       bool    `json:"passIdentityHeaders"`
-	ProxyLogLevel             string  `json:"proxyLogLevel,omitempty"`
-	SkipXffAppend             bool    `json:"skipXffAppend"`
-	TimeoutIdle               string  `json:"timeoutIdle,omitempty"`
-	TimeoutRead               string  `json:"timeoutRead,omitempty"`
-	TimeoutWrite              string  `json:"timeoutWrite,omitempty"`
-	TracingSampleRate         float64 `json:"tracingSampleRate,omitempty"`
+	IdentityProviderUrl          string  `json:"identityProviderUrl,omitempty"`
+	LogLevel                     string  `json:"logLevel,omitempty"`
+	PassIdentityHeaders          bool    `json:"passIdentityHeaders"`
+	ProxyLogLevel                string  `json:"proxyLogLevel,omitempty"`
+	SkipXffAppend                bool    `json:"skipXffAppend"`
+	TimeoutIdle                  string  `json:"timeoutIdle,omitempty"`
+	TimeoutRead                  string  `json:"timeoutRead,omitempty"`
+	TimeoutWrite                 string  `json:"timeoutWrite,omitempty"`
+	TracingSampleRate            float64 `json:"tracingSampleRate,omitempty"`
 }
 
 // ClusterSettings represents the cluster settings data returned by the API
 type ClusterSettings struct {
-	ID                        string  `json:"id"`
-	Address                   string  `json:"address"`
-	AuthenticateServiceUrl    string  `json:"authenticateServiceUrl"`
-	AutoApplyChangesets       bool    `json:"autoApplyChangesets"`
-	CookieExpire              string  `json:"cookieExpire"`
-	CookieHttpOnly            bool    `json:"cookieHttpOnly"`
-	CookieName                string  `json:"cookieName"`
-	DefaultUpstreamTimeout    string  `json:"defaultUpstreamTimeout"`
-	DNSLookupFamily           string  `json:"dnsLookupFamily"`
-	IdentityProvider          string  `json:"identityProvider"`
-	IdentityProviderClientId  string  `json:"identityProviderClientId"`
+	ID                           string  `json:"id"`
+	Address                      string  `json:"address"`
+	AuthenticateServiceUrl       string  `json:"authenticateServiceUrl"`
+	AutoApplyChangesets          bool    `json:"autoApplyChangesets"`
+	CookieExpire                 string  `json:"cookieExpire"`
+	CookieHttpOnly               bool    `json:"cookieHttpOnly"`
+	CookieName                   string  `json:"cookieName"`
+	DefaultUpstreamTimeout       string  `json:"defaultUpstreamTimeout"`
+	DNSLookupFamily              string  `json:"dnsLookupFamily"`
+	IdentityProvider             string  `json:"identityProvider"`
+	IdentityProviderClientId     string  `json:"identityProviderClientId"`
 	IdentityProviderClientSecret *string `json:"identityProviderClientSecret"`
-	IdentityProviderUrl       string  `json:"identityProviderUrl"`
-	LogLevel                  string  `json:"logLevel"`
-	PassIdentityHeaders       bool    `json:"passIdentityHeaders"`
-	ProxyLogLevel             string  `json:"proxyLogLevel"`
-	SkipXffAppend             bool    `json:"skipXffAppend"`
-	TimeoutIdle               string  `json:"timeoutIdle"`
-	TimeoutRead               string  `json:"timeoutRead"`
-	TimeoutWrite              string  `json:"timeoutWrite"`
-	TracingSampleRate         float64 `json:"tracingSampleRate"`
+	IdentityProviderUrl          string  `json:"identityProviderUrl"`
+	LogLevel                     string  `json:"logLevel"`
+	PassIdentityHeaders          bool    `json:"passIdentityHeaders"`
+	ProxyLogLevel                string  `json:"proxyLogLevel"`
+	SkipXffAppend                bool    `json:"skipXffAppend"`
+	TimeoutIdle                  string  `json:"timeoutIdle"`
+	TimeoutRead                  string  `json:"timeoutRead"`
+	TimeoutWrite                 string  `json:"timeoutWrite"`
+	TracingSampleRate            float64 `json:"tracingSampleRate"`
 }
