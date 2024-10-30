@@ -175,8 +175,12 @@ func (r *RouteResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 			// Kubernetes service account token, optional field
 			"kubernetes_service_account_token": schema.StringAttribute{
 				Optional:            true,
+				Computed:            true,
 				MarkdownDescription: "The Kubernetes service account token to use for authentication.",
 				Sensitive:           true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 		},
 	}
