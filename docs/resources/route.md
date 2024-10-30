@@ -72,6 +72,7 @@ resource "pomeriumzero_route" "foobar_tooling" {
 - `show_error_details` (Boolean) If set to `true`, shows detailed error messages when errors occur.
 - `tls_skip_verify` (Boolean) If set to `true`, skips TLS verification for upstream connections. Use with caution.
 - `tls_upstream_allow_renegotiation` (Boolean) If set to `true`, allows TLS renegotiation for upstream connections.
+- `kubernetes_service_account_token` (String) Kubernetes service account token used for accessing kubernetes api via pomerium.
 
 ### Read-Only
 
