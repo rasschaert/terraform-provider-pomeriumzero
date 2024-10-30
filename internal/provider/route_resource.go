@@ -54,6 +54,7 @@ type RouteResourceModel struct {
 	PolicyIDs                                 types.List   `tfsdk:"policy_ids"`
 	Prefix                                    types.String `tfsdk:"prefix"`
 	PrefixRewrite                             types.String `tfsdk:"prefix_rewrite"`
+	KubernetesServiceAccountToken             types.String `tfsdk:"kubernetes_service_account_token"`
 }
 
 // Metadata sets the resource type name for the RouteResource.
@@ -170,6 +171,12 @@ func (r *RouteResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 			"prefix_rewrite": schema.StringAttribute{
 				Optional:            true,
 				MarkdownDescription: "If specified, rewrites the URL prefix before forwarding the request to the upstream service.",
+			},
+			// Kubernetes service account token, optional field
+			"kubernetes_service_account_token": schema.StringAttribute{
+				Optional:            true,
+				MarkdownDescription: "The Kubernetes service account token to use for authentication.",
+				Sensitive:           true,
 			},
 		},
 	}
@@ -525,6 +532,7 @@ func createRouteRequest(model *RouteResourceModel) map[string]interface{} {
 		"showErrorDetails":                          model.ShowErrorDetails.ValueBool(),
 		"tlsSkipVerify":                             model.TLSSkipVerify.ValueBool(),
 		"tlsUpstreamAllowRenegotiation":             model.TLSUpstreamAllowRenegotiation.ValueBool(),
+		"kubernetesServiceAccountToken":             model.KubernetesServiceAccountToken.ValueString(),
 	}
 
 	// Add 'to' field if it's not null
@@ -558,6 +566,9 @@ func createRouteRequest(model *RouteResourceModel) map[string]interface{} {
 	}
 	if !model.PrefixRewrite.IsNull() {
 		req["prefixRewrite"] = model.PrefixRewrite.ValueString()
+	}
+	if !model.KubernetesServiceAccountToken.IsNull() {
+		req["kubernetesServiceAccountToken"] = model.KubernetesServiceAccountToken.ValueString()
 	}
 
 	// Return the constructed request map
@@ -619,6 +630,9 @@ func mapRouteResponseToModel(ctx context.Context, apiResponse map[string]interfa
 	}
 	if prefixRewrite, ok := apiResponse["prefixRewrite"].(string); ok {
 		model.PrefixRewrite = types.StringValue(prefixRewrite)
+	}
+	if kubernetesServiceAccountToken, ok := apiResponse["kubernetesServiceAccountToken"].(string); ok {
+		model.KubernetesServiceAccountToken = types.StringValue(kubernetesServiceAccountToken)
 	}
 
 	// Return the populated model

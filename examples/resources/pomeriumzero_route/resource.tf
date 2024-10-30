@@ -32,3 +32,17 @@ resource "pomeriumzero_route" "foobar_tooling" {
     pomeriumzero_policy.allow_foobar_group_members.id
   ]
 }
+
+resource "pomeriumzero_route" "kubernetes_api" {
+  name = "Kubernetes API"
+  from = "https://k8s-api.${pomeriumzero_cluster.default.fqdn}"
+  to = ["https://kubernetes.default.svc.cluster.local/"]
+  namespace_id = data.pomeriumzero_cluster.default.namespace_id
+  allow_websockets = false
+  preserve_host_header = false
+  policy_ids = [
+    pomeriumzero_policy.allow_kubernetes_admins.id
+  ]
+  pass_identity_headers = true
+  kubernetes_service_account_token = data.kubernetes_secret.k8s_api_service_account_token.data["token"]
+}
