@@ -179,18 +179,6 @@ func (d *ClusterDataSource) Read(ctx context.Context, req datasource.ReadRequest
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-// Cluster represents a Pomerium Zero cluster.
-type Cluster struct {
-	ID                  string `json:"id"`
-	Name                string `json:"name"`
-	NamespaceID         string `json:"namespaceId"`
-	Domain              string `json:"domain"`
-	FQDN                string `json:"fqdn"`
-	AutoDetectIPAddress string `json:"autoDetectIpAddress"`
-	CreatedAt           string `json:"createdAt"`
-	UpdatedAt           string `json:"updatedAt"`
-}
-
 // GetClusters fetches all clusters from Pomerium Zero.
 func (d *ClusterDataSource) GetClusters(ctx context.Context) ([]Cluster, error) {
 	url := fmt.Sprintf("https://console.pomerium.app/api/v0/organizations/%s/clusters", d.organizationID)
