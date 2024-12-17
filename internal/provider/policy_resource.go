@@ -553,24 +553,6 @@ type UpdatePolicyRequest struct {
 	Remediation string      `json:"remediation"`
 }
 
-// Policy represents a Pomerium Zero policy
-type Policy struct {
-	ID          string          `json:"id"`
-	Name        string          `json:"name"`
-	Description string          `json:"description"`
-	Enforced    bool            `json:"enforced"`
-	Explanation string          `json:"explanation"`
-	NamespaceID string          `json:"namespaceId"`
-	PPL         json.RawMessage `json:"ppl"`
-	Remediation string          `json:"remediation"`
-	CreatedAt   string          `json:"createdAt"`
-	UpdatedAt   string          `json:"updatedAt"`
-	Routes      []struct {
-		ID   string `json:"id"`
-		Name string `json:"name"`
-	} `json:"routes"`
-}
-
 // GetSchemaResourceData retrieves all policies and returns a JSON representation of their key attributes
 func (r *PolicyResource) GetSchemaResourceData(ctx context.Context) ([]byte, error) {
 	// Fetch all policies from the API
