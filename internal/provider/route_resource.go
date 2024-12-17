@@ -51,6 +51,7 @@ type RouteResourceModel struct {
 	ShowErrorDetails                          types.Bool   `tfsdk:"show_error_details"`
 	TLSSkipVerify                             types.Bool   `tfsdk:"tls_skip_verify"`
 	TLSUpstreamAllowRenegotiation             types.Bool   `tfsdk:"tls_upstream_allow_renegotiation"`
+	TLSDownstreamServerName                   types.String `tfsdk:"tls_downstream_server_name"`
 	PolicyIDs                                 types.List   `tfsdk:"policy_ids"`
 	Prefix                                    types.String `tfsdk:"prefix"`
 	PrefixRewrite                             types.String `tfsdk:"prefix_rewrite"`
@@ -155,6 +156,10 @@ func (r *RouteResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				Computed:            true,
 				Default:             booldefault.StaticBool(false),
 				MarkdownDescription: "If set to `true`, allows TLS renegotiation for upstream connections.",
+			},
+			"tls_downstream_server_name": schema.StringAttribute{
+				Optional:            true,
+				MarkdownDescription: "TLS Downstream Server Name overrides the hostname specified in the from field.",
 			},
 			// List of policy IDs associated with the route, optional field
 			"policy_ids": schema.ListAttribute{
@@ -575,6 +580,10 @@ func createRouteRequest(model *RouteResourceModel) map[string]interface{} {
 		req["kubernetesServiceAccountToken"] = model.KubernetesServiceAccountToken.ValueString()
 	}
 
+	if !model.TLSDownstreamServerName.IsNull() {
+		req["tlsDownstreamServerName"] = model.TLSDownstreamServerName.ValueString()
+	}
+
 	// Return the constructed request map
 	return req
 }
@@ -637,6 +646,9 @@ func mapRouteResponseToModel(ctx context.Context, apiResponse map[string]interfa
 	}
 	if kubernetesServiceAccountToken, ok := apiResponse["kubernetesServiceAccountToken"].(string); ok {
 		model.KubernetesServiceAccountToken = types.StringValue(kubernetesServiceAccountToken)
+	}
+	if tlsDownstreamServerName, ok := apiResponse["tlsDownstreamServerName"].(string); ok {
+		model.TLSDownstreamServerName = types.StringValue(tlsDownstreamServerName)
 	}
 
 	// Return the populated model
