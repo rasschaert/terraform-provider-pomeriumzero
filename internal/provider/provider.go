@@ -223,6 +223,7 @@ func (p *pomeriumZeroProvider) getOrganizationID(ctx context.Context) (string, e
 func (p *pomeriumZeroProvider) DataSources(_ context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
 		NewClusterDataSource,
+		NewPolicyDataSource,
 	}
 }
 
