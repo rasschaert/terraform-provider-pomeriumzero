@@ -57,6 +57,7 @@ type ClusterSettingsResourceModel struct {
 	TimeoutRead                  types.String  `tfsdk:"timeout_read"`
 	TimeoutWrite                 types.String  `tfsdk:"timeout_write"`
 	TracingSampleRate            types.Float64 `tfsdk:"tracing_sample_rate"`
+	CodecType                    types.String  `tfsdk:"codec_type"`
 }
 
 // Metadata sets the resource type name for the ClusterSettingsResource.
@@ -734,6 +735,7 @@ func createClusterSettingsRequest(model ClusterSettingsResourceModel) CreateClus
 		TimeoutRead:                  model.TimeoutRead.ValueString(),
 		TimeoutWrite:                 model.TimeoutWrite.ValueString(),
 		TracingSampleRate:            model.TracingSampleRate.ValueFloat64(),
+		CodecType:                    model.CodecType.ValueString(),
 	}
 }
 
@@ -755,6 +757,7 @@ func updateClusterSettingsRequest(model ClusterSettingsResourceModel) UpdateClus
 		TimeoutRead:            model.TimeoutRead.ValueString(),
 		TimeoutWrite:           model.TimeoutWrite.ValueString(),
 		TracingSampleRate:      model.TracingSampleRate.ValueFloat64(),
+		CodecType:              model.CodecType.ValueString(),
 	}
 
 	// For nullable fields, only include them in the request if they're not null
@@ -822,6 +825,7 @@ type CreateClusterSettingsRequest struct {
 	TimeoutRead                  string  `json:"timeoutRead,omitempty"`
 	TimeoutWrite                 string  `json:"timeoutWrite,omitempty"`
 	TracingSampleRate            float64 `json:"tracingSampleRate,omitempty"`
+	CodecType                    string  `json:"codecType,omitempty"`
 }
 
 // UpdateClusterSettingsRequest is used to update existing cluster settings
@@ -846,6 +850,7 @@ type UpdateClusterSettingsRequest struct {
 	TimeoutRead                  string  `json:"timeoutRead,omitempty"`
 	TimeoutWrite                 string  `json:"timeoutWrite,omitempty"`
 	TracingSampleRate            float64 `json:"tracingSampleRate,omitempty"`
+	CodecType                    string  `json:"codecType"`
 }
 
 // ClusterSettings represents the cluster settings data returned by the API
