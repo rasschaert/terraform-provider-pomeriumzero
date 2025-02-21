@@ -182,6 +182,10 @@ func (r *ClusterSettingsResource) Schema(_ context.Context, _ resource.SchemaReq
 				Optional:            true,
 				MarkdownDescription: "The sampling rate for tracing.",
 			},
+			"codec_type": resource_schema.StringAttribute{
+				Optional:            true,
+				MarkdownDescription: "The codec type to use. Valid values are '', 'auto', 'http1', 'http2', 'http3'.",
+			},
 		},
 	}
 }
