@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -16,6 +17,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 // Ensure the implementation satisfies the expected interfaces.
@@ -268,7 +270,14 @@ func (r *RouteResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	// Call the readRoute method to fetch the route from the external system
 	route, err := r.readRoute(ctx, state.ID.ValueString())
 	if err != nil {
-		// If there's an error, add it to the diagnostics
+		// Check if the error is a 404 Not Found
+		if strings.Contains(err.Error(), "unexpected status code: 404") {
+			// If the resource is not found, Terraform should remove it from state
+			tflog.Warn(ctx, fmt.Sprintf("Route with ID %s no longer exists in Pomerium Zero", state.ID.ValueString()))
+			resp.State.RemoveResource(ctx)
+			return
+		}
+		// For other errors, add them to diagnostics
 		resp.Diagnostics.AddError(
 			"Error Reading Route",
 			fmt.Sprintf("Could not read route ID %s: %s", state.ID.ValueString(), err),
