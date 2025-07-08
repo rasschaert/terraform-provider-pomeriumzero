@@ -568,7 +568,12 @@ func (r *ClusterSettingsResource) getClusterSettings(ctx context.Context, id str
 	// Set request headers
 	req.Header.Set("Authorization", "Bearer "+r.token)
 	req.Header.Set("Content-Type", "application/json")
-	log.Printf("[DEBUG] Request headers: %+v", req.Header)
+
+	// Create obfuscated token for logging
+	obfuscatedToken := strings.Repeat("*", len(r.token))
+	headerStr := fmt.Sprintf("%+v", req.Header)
+	safeHeaderStr := strings.ReplaceAll(headerStr, r.token, obfuscatedToken)
+	log.Printf("[DEBUG] Request headers: %s", safeHeaderStr)
 
 	// Send the HTTP request
 	resp, err := r.client.Do(req)
