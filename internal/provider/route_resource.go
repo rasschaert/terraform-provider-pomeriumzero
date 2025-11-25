@@ -617,6 +617,9 @@ func mapRouteResponseToModel(ctx context.Context, apiResponse map[string]interfa
 	if to, ok := apiResponse["to"].([]interface{}); ok {
 		toList, _ := types.ListValueFrom(ctx, types.StringType, to)
 		model.To = toList
+	} else {
+		// Initialize with an empty list of the correct type to avoid type mismatch errors
+		model.To, _ = types.ListValueFrom(ctx, types.StringType, []string{})
 	}
 
 	// Helper function to safely convert interface{} to bool
