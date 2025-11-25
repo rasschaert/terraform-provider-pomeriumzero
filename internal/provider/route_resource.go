@@ -643,10 +643,25 @@ func mapRouteResponseToModel(ctx context.Context, apiResponse map[string]interfa
 	model.TLSSkipVerify = toBool(apiResponse["tlsSkipVerify"])
 	model.TLSUpstreamAllowRenegotiation = toBool(apiResponse["tlsUpstreamAllowRenegotiation"])
 
-	// Handle the 'policyIds' field, which is a list of strings
+	// Handle the 'policyIds' field - the API may return this as 'policyIds' (array of strings)
+	// or as 'policies' (array of objects with 'id' field)
 	if policyIDs, ok := apiResponse["policyIds"].([]interface{}); ok {
 		policyIDsList, _ := types.ListValueFrom(ctx, types.StringType, policyIDs)
 		model.PolicyIDs = policyIDsList
+	} else if policies, ok := apiResponse["policies"].([]interface{}); ok {
+		// Extract IDs from policy objects
+		var policyIDs []string
+		for _, p := range policies {
+			if policyObj, ok := p.(map[string]interface{}); ok {
+				if id, ok := policyObj["id"].(string); ok {
+					policyIDs = append(policyIDs, id)
+				}
+			}
+		}
+		if len(policyIDs) > 0 {
+			policyIDsList, _ := types.ListValueFrom(ctx, types.StringType, policyIDs)
+			model.PolicyIDs = policyIDsList
+		}
 	}
 
 	// Handle optional string fields
