@@ -157,7 +157,46 @@ func TestMapRouteResponseToModel_BoolFields(t *testing.T) {
 		}
 	})
 
-	t.Run("absent bool fields are null", func(t *testing.T) {
+	t.Run("absent Default bools fall back to their schema default", func(t *testing.T) {
+		// Attributes declared with Default(...) in the schema should never be
+		// null in state — the mapper must apply the same default so that Read
+		// doesn't produce spurious drift when the API omits the field.
+		apiResponse := map[string]interface{}{
+			"id":          "route-1",
+			"name":        "r",
+			"namespaceId": "ns",
+			"from":        "https://a.example.com",
+		}
+		model := mustMapRoute(t, ctx, apiResponse)
+
+		defaultFalse := []struct {
+			name string
+			got  types.Bool
+		}{
+			{"AllowSpdy", model.AllowSpdy},
+			{"EnableGoogleCloudServerlessAuthentication", model.EnableGoogleCloudServerlessAuthentication},
+			{"PreserveHostHeader", model.PreserveHostHeader},
+			{"TLSSkipVerify", model.TLSSkipVerify},
+			{"TLSUpstreamAllowRenegotiation", model.TLSUpstreamAllowRenegotiation},
+		}
+		for _, c := range defaultFalse {
+			if c.got.IsNull() {
+				t.Errorf("%s: got null, want false (schema default)", c.name)
+			} else if c.got.ValueBool() {
+				t.Errorf("%s: got true, want false (schema default)", c.name)
+			}
+		}
+
+		if model.ShowErrorDetails.IsNull() {
+			t.Error("ShowErrorDetails: got null, want true (schema default)")
+		} else if !model.ShowErrorDetails.ValueBool() {
+			t.Errorf("ShowErrorDetails: got false, want true (schema default)")
+		}
+	})
+
+	t.Run("absent nullable bools are null", func(t *testing.T) {
+		// Attributes with Optional+Computed but no Default should stay null
+		// when absent from the API response, so the user can omit them.
 		apiResponse := map[string]interface{}{
 			"id":          "route-1",
 			"name":        "r",
@@ -170,7 +209,6 @@ func TestMapRouteResponseToModel_BoolFields(t *testing.T) {
 			name string
 			got  types.Bool
 		}{
-			{"AllowSpdy", model.AllowSpdy},
 			{"AllowWebsockets", model.AllowWebsockets},
 			{"PassIdentityHeaders", model.PassIdentityHeaders},
 		}

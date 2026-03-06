@@ -310,43 +310,57 @@ func (r *ClusterSettingsResource) ImportState(ctx context.Context, req resource.
 
 // updateClusterSettingsResourceModel maps a ClusterSettings API response onto the Terraform model.
 // Note: ID is NOT updated from the response — the cluster ID is used as the stable identifier.
+//
+// All attributes in this resource are Optional-only (no Computed, no Default). The mapper must
+// therefore set null when the API returns an empty/zero value, so that configs that omit a field
+// (null in Terraform) don't drift against a concrete empty-string or false state.
 func updateClusterSettingsResourceModel(model *ClusterSettingsResourceModel, settings *ClusterSettings) {
-	model.Address = types.StringValue(settings.Address)
-	model.AutoApplyChangesets = types.BoolValue(settings.AutoApplyChangesets)
-	model.CookieExpire = types.StringValue(settings.CookieExpire)
-	model.CookieHttpOnly = types.BoolValue(settings.CookieHttpOnly)
-	model.CookieName = types.StringValue(settings.CookieName)
-	model.DefaultUpstreamTimeout = types.StringValue(settings.DefaultUpstreamTimeout)
-	model.DNSLookupFamily = types.StringValue(settings.DNSLookupFamily)
-	model.LogLevel = types.StringValue(settings.LogLevel)
-	model.PassIdentityHeaders = types.BoolValue(settings.PassIdentityHeaders)
-	model.SkipXffAppend = types.BoolValue(settings.SkipXffAppend)
-	model.TimeoutIdle = types.StringValue(settings.TimeoutIdle)
-	model.TimeoutRead = types.StringValue(settings.TimeoutRead)
-	model.TimeoutWrite = types.StringValue(settings.TimeoutWrite)
-	model.TracingSampleRate = types.Float64Value(settings.TracingSampleRate)
-
-	// Nullable string fields: set to null when empty so Terraform detects unset vs empty.
-	setNullableString := func(dst *types.String, val string) {
+	// Optional-only string: null when empty, value otherwise.
+	optStr := func(val string) types.String {
 		if val != "" {
-			*dst = types.StringValue(val)
-		} else {
-			*dst = types.StringNull()
+			return types.StringValue(val)
 		}
+		return types.StringNull()
 	}
-	setNullableString(&model.AuthenticateServiceUrl, settings.AuthenticateServiceUrl)
-	setNullableString(&model.IdentityProvider, settings.IdentityProvider)
-	setNullableString(&model.IdentityProviderClientId, settings.IdentityProviderClientId)
-	setNullableString(&model.IdentityProviderUrl, settings.IdentityProviderUrl)
-
-	// ProxyLogLevel: API may return null/empty; don't send empty strings back.
-	if settings.ProxyLogLevel != "" {
-		model.ProxyLogLevel = types.StringValue(settings.ProxyLogLevel)
-	} else {
-		model.ProxyLogLevel = types.StringNull()
+	// Optional-only bool: null when false (zero value), value otherwise.
+	// The API always returns a concrete bool, but if a user omits the field
+	// we store null so the next plan doesn't show false -> null drift.
+	optBool := func(val bool) types.Bool {
+		if val {
+			return types.BoolValue(true)
+		}
+		return types.BoolNull()
+	}
+	// Optional-only float64: null when zero.
+	optFloat := func(val float64) types.Float64 {
+		if val != 0 {
+			return types.Float64Value(val)
+		}
+		return types.Float64Null()
 	}
 
-	// IdentityProviderClientSecret: pointer, null when not set.
+	model.Address = optStr(settings.Address)
+	model.AutoApplyChangesets = optBool(settings.AutoApplyChangesets)
+	model.CookieExpire = optStr(settings.CookieExpire)
+	model.CookieHttpOnly = optBool(settings.CookieHttpOnly)
+	model.CookieName = optStr(settings.CookieName)
+	model.DefaultUpstreamTimeout = optStr(settings.DefaultUpstreamTimeout)
+	model.DNSLookupFamily = optStr(settings.DNSLookupFamily)
+	model.LogLevel = optStr(settings.LogLevel)
+	model.PassIdentityHeaders = optBool(settings.PassIdentityHeaders)
+	model.ProxyLogLevel = optStr(settings.ProxyLogLevel)
+	model.SkipXffAppend = optBool(settings.SkipXffAppend)
+	model.TimeoutIdle = optStr(settings.TimeoutIdle)
+	model.TimeoutRead = optStr(settings.TimeoutRead)
+	model.TimeoutWrite = optStr(settings.TimeoutWrite)
+	model.TracingSampleRate = optFloat(settings.TracingSampleRate)
+	model.CodecType = optStr(settings.CodecType)
+	model.AuthenticateServiceUrl = optStr(settings.AuthenticateServiceUrl)
+	model.IdentityProvider = optStr(settings.IdentityProvider)
+	model.IdentityProviderClientId = optStr(settings.IdentityProviderClientId)
+	model.IdentityProviderUrl = optStr(settings.IdentityProviderUrl)
+
+	// IdentityProviderClientSecret: pointer in the API struct (sensitive); null when absent.
 	if settings.IdentityProviderClientSecret != nil {
 		model.IdentityProviderClientSecret = types.StringValue(*settings.IdentityProviderClientSecret)
 	} else {

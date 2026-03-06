@@ -372,25 +372,34 @@ func mapRouteResponseToModel(ctx context.Context, apiResponse map[string]interfa
 		model.To, _ = types.ListValueFrom(ctx, types.StringType, []string{})
 	}
 
-	// Helper to safely convert interface{} to types.Bool
-	toBool := func(v interface{}) types.Bool {
-		if v == nil {
-			return types.BoolNull()
+	// toBoolDefault extracts a bool from the API response, falling back to a
+	// provided default when the field is absent or non-bool. Use this for
+	// Optional+Computed+Default attributes so that the state value always
+	// matches the schema default rather than going null on unexpected responses.
+	toBoolDefault := func(v interface{}, def bool) types.Bool {
+		if b, ok := v.(bool); ok {
+			return types.BoolValue(b)
 		}
+		return types.BoolValue(def)
+	}
+	// toBoolNullable extracts a bool from the API response and returns null
+	// when the field is absent. Use this for Optional+Computed attributes
+	// that have no schema-level Default (null is a valid/meaningful state).
+	toBoolNullable := func(v interface{}) types.Bool {
 		if b, ok := v.(bool); ok {
 			return types.BoolValue(b)
 		}
 		return types.BoolNull()
 	}
 
-	model.AllowSpdy = toBool(apiResponse["allowSpdy"])
-	model.AllowWebsockets = toBool(apiResponse["allowWebsockets"])
-	model.EnableGoogleCloudServerlessAuthentication = toBool(apiResponse["enableGoogleCloudServerlessAuthentication"])
-	model.PassIdentityHeaders = toBool(apiResponse["passIdentityHeaders"])
-	model.PreserveHostHeader = toBool(apiResponse["preserveHostHeader"])
-	model.ShowErrorDetails = toBool(apiResponse["showErrorDetails"])
-	model.TLSSkipVerify = toBool(apiResponse["tlsSkipVerify"])
-	model.TLSUpstreamAllowRenegotiation = toBool(apiResponse["tlsUpstreamAllowRenegotiation"])
+	model.AllowSpdy = toBoolDefault(apiResponse["allowSpdy"], false)
+	model.AllowWebsockets = toBoolNullable(apiResponse["allowWebsockets"])
+	model.EnableGoogleCloudServerlessAuthentication = toBoolDefault(apiResponse["enableGoogleCloudServerlessAuthentication"], false)
+	model.PassIdentityHeaders = toBoolNullable(apiResponse["passIdentityHeaders"])
+	model.PreserveHostHeader = toBoolDefault(apiResponse["preserveHostHeader"], false)
+	model.ShowErrorDetails = toBoolDefault(apiResponse["showErrorDetails"], true)
+	model.TLSSkipVerify = toBoolDefault(apiResponse["tlsSkipVerify"], false)
+	model.TLSUpstreamAllowRenegotiation = toBoolDefault(apiResponse["tlsUpstreamAllowRenegotiation"], false)
 
 	// Handle policyIds — API may return either a flat string array or an array of objects
 	if policyIDs, ok := apiResponse["policyIds"].([]interface{}); ok {
@@ -410,18 +419,20 @@ func mapRouteResponseToModel(ctx context.Context, apiResponse map[string]interfa
 		}
 	}
 
-	// Optional string fields
-	if v, ok := apiResponse["prefix"].(string); ok {
-		model.Prefix = types.StringValue(v)
+	// Optional-only string fields: use StringValue when the API returns a
+	// non-empty string, otherwise StringNull so that unset configs (null)
+	// don't drift against an empty-string state.
+	toOptionalString := func(key string) types.String {
+		if v, ok := apiResponse[key].(string); ok && v != "" {
+			return types.StringValue(v)
+		}
+		return types.StringNull()
 	}
-	if v, ok := apiResponse["prefixRewrite"].(string); ok {
-		model.PrefixRewrite = types.StringValue(v)
-	}
+	model.Prefix = toOptionalString("prefix")
+	model.PrefixRewrite = toOptionalString("prefixRewrite")
+	model.TLSDownstreamServerName = toOptionalString("tlsDownstreamServerName")
 	if v, ok := apiResponse["kubernetesServiceAccountToken"].(string); ok {
 		model.KubernetesServiceAccountToken = types.StringValue(v)
-	}
-	if v, ok := apiResponse["tlsDownstreamServerName"].(string); ok {
-		model.TLSDownstreamServerName = types.StringValue(v)
 	}
 
 	return model, nil

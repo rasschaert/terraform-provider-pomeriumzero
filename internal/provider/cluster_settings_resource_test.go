@@ -105,8 +105,10 @@ func TestUpdateClusterSettingsResourceModel_AllFields(t *testing.T) {
 	if !model.PassIdentityHeaders.ValueBool() {
 		t.Error("PassIdentityHeaders: got false, want true")
 	}
-	if model.SkipXffAppend.ValueBool() {
-		t.Error("SkipXffAppend: got true, want false")
+	// SkipXffAppend is false in the fixture — optBool maps false → null for
+	// Optional-only bools, so the field should be null rather than false.
+	if !model.SkipXffAppend.IsNull() {
+		t.Errorf("SkipXffAppend: got %v, want null (false is the zero value for Optional-only bool)", model.SkipXffAppend.ValueBool())
 	}
 	if model.TracingSampleRate.ValueFloat64() != 0.5 {
 		t.Errorf("TracingSampleRate: got %v, want 0.5", model.TracingSampleRate.ValueFloat64())
@@ -129,6 +131,59 @@ func TestUpdateClusterSettingsResourceModel_NilClientSecret(t *testing.T) {
 
 	if !model.IdentityProviderClientSecret.IsNull() {
 		t.Errorf("IdentityProviderClientSecret: expected null when API returns nil, got %q", model.IdentityProviderClientSecret.ValueString())
+	}
+}
+
+func TestUpdateClusterSettingsResourceModel_ZeroValuesAreNull(t *testing.T) {
+	// All Optional-only fields should be null when the API returns zero values,
+	// so that configs omitting those fields don't drift against a concrete state.
+	settings := &ClusterSettings{} // all zero values
+	var model ClusterSettingsResourceModel
+	updateClusterSettingsResourceModel(&model, settings)
+
+	nullStrings := []struct {
+		name string
+		got  types.String
+	}{
+		{"Address", model.Address},
+		{"AuthenticateServiceUrl", model.AuthenticateServiceUrl},
+		{"CookieExpire", model.CookieExpire},
+		{"CookieName", model.CookieName},
+		{"DefaultUpstreamTimeout", model.DefaultUpstreamTimeout},
+		{"DNSLookupFamily", model.DNSLookupFamily},
+		{"IdentityProvider", model.IdentityProvider},
+		{"IdentityProviderClientId", model.IdentityProviderClientId},
+		{"IdentityProviderUrl", model.IdentityProviderUrl},
+		{"LogLevel", model.LogLevel},
+		{"ProxyLogLevel", model.ProxyLogLevel},
+		{"TimeoutIdle", model.TimeoutIdle},
+		{"TimeoutRead", model.TimeoutRead},
+		{"TimeoutWrite", model.TimeoutWrite},
+		{"CodecType", model.CodecType},
+	}
+	for _, c := range nullStrings {
+		if !c.got.IsNull() {
+			t.Errorf("%s: got %q, want null for empty API response", c.name, c.got.ValueString())
+		}
+	}
+
+	nullBools := []struct {
+		name string
+		got  types.Bool
+	}{
+		{"AutoApplyChangesets", model.AutoApplyChangesets},
+		{"CookieHttpOnly", model.CookieHttpOnly},
+		{"PassIdentityHeaders", model.PassIdentityHeaders},
+		{"SkipXffAppend", model.SkipXffAppend},
+	}
+	for _, c := range nullBools {
+		if !c.got.IsNull() {
+			t.Errorf("%s: got %v, want null for false API response", c.name, c.got.ValueBool())
+		}
+	}
+
+	if !model.TracingSampleRate.IsNull() {
+		t.Errorf("TracingSampleRate: got %v, want null for zero API response", model.TracingSampleRate.ValueFloat64())
 	}
 }
 
