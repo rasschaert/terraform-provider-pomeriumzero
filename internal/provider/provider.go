@@ -197,5 +197,6 @@ func (p *pomeriumZeroProvider) Resources(_ context.Context) []func() resource.Re
 		NewClusterSettingsResource,
 		NewPolicyResource,
 		NewRouteResource,
+		NewServiceAccountResource,
 	}
 }

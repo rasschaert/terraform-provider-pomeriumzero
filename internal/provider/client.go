@@ -161,3 +161,15 @@ func (c *apiClient) routesURL() string {
 func (c *apiClient) routeURL(id string) string {
 	return fmt.Sprintf("%s/organizations/%s/routes/%s", apiBaseURL, c.organizationID, id)
 }
+
+func (c *apiClient) serviceAccountsURL(clusterID string) string {
+	return fmt.Sprintf("%s/organizations/%s/clusters/%s/serviceAccounts", apiBaseURL, c.organizationID, clusterID)
+}
+
+func (c *apiClient) serviceAccountURL(clusterID, serviceAccountID string) string {
+	return fmt.Sprintf("%s/organizations/%s/clusters/%s/serviceAccounts/%s", apiBaseURL, c.organizationID, clusterID, serviceAccountID)
+}
+
+func (c *apiClient) serviceAccountTokenURL(clusterID, serviceAccountID string) string {
+	return fmt.Sprintf("%s/organizations/%s/clusters/%s/serviceAccounts/%s/token", apiBaseURL, c.organizationID, clusterID, serviceAccountID)
+}
