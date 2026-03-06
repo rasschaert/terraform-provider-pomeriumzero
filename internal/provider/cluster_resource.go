@@ -2,10 +2,9 @@ package provider
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -26,9 +25,7 @@ func NewClusterResource() resource.Resource {
 
 // ClusterResource defines the resource implementation.
 type ClusterResource struct {
-	client         *http.Client
-	token          string
-	organizationID string
+	client *apiClient
 }
 
 // ClusterResourceModel describes the resource data model.
@@ -92,62 +89,55 @@ func (r *ClusterResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 	}
 }
 
-// Configure prepares a Pomerium Zero API client for the ClusterResource.
-func (r *ClusterResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+// Configure prepares the ClusterResource with provider data.
+func (r *ClusterResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	if req.ProviderData == nil {
 		return
 	}
-
-	provider, ok := req.ProviderData.(*pomeriumZeroProvider)
+	client, ok := req.ProviderData.(*apiClient)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *pomeriumZeroProvider, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *apiClient, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}
-
-	r.client = provider.client
-	r.token = provider.token
-	r.organizationID = provider.organizationID
+	r.client = client
 }
 
 // Create creates a new cluster in Pomerium Zero.
 func (r *ClusterResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan ClusterResourceModel
-	diags := req.Plan.Get(ctx, &plan)
-	resp.Diagnostics.Append(diags...)
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// Create the cluster
-	cluster, err := r.createCluster(ctx, plan)
-	if err != nil {
+	body := map[string]string{
+		"name":   plan.Name.ValueString(),
+		"domain": plan.Domain.ValueString(),
+	}
+	var cluster Cluster
+	if err := r.client.post(ctx, r.client.clustersURL(), body, http.StatusCreated, &cluster); err != nil {
 		resp.Diagnostics.AddError("Error creating cluster", err.Error())
 		return
 	}
 
-	updateClusterResourceModel(&plan, cluster)
-
-	diags = resp.State.Set(ctx, plan)
-	resp.Diagnostics.Append(diags...)
+	updateClusterResourceModel(&plan, &cluster)
+	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
 }
 
 // Read retrieves information about a Pomerium Zero cluster.
 func (r *ClusterResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state ClusterResourceModel
-	// Read Terraform configuration data into the model
-	diags := req.State.Get(ctx, &state)
-	resp.Diagnostics.Append(diags...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// Fetch the cluster from Pomerium Zero
-	cluster, err := r.getCluster(ctx, state.ID.ValueString())
-	if err != nil {
-		if strings.Contains(err.Error(), "cluster not found") {
+	var cluster Cluster
+	if err := r.client.get(ctx, r.client.clusterURL(state.ID.ValueString()), &cluster); err != nil {
+		if errors.Is(err, errNotFound) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -155,257 +145,74 @@ func (r *ClusterResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 
-	// Map the fetched cluster data to our ClusterResourceModel
-	updateClusterResourceModel(&state, cluster)
-
-	diags = resp.State.Set(ctx, &state)
-	resp.Diagnostics.Append(diags...)
+	updateClusterResourceModel(&state, &cluster)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
 // Update updates an existing cluster in Pomerium Zero.
 func (r *ClusterResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan ClusterResourceModel
-	// Read the updated Terraform configuration data into the model
-	diags := req.Plan.Get(ctx, &plan)
-	resp.Diagnostics.Append(diags...)
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// Update the cluster
-	cluster, err := r.updateCluster(ctx, plan)
-	if err != nil {
+	body := map[string]string{
+		"name":   plan.Name.ValueString(),
+		"domain": plan.Domain.ValueString(),
+	}
+	var cluster Cluster
+	if err := r.client.put(ctx, r.client.clusterURL(plan.ID.ValueString()), body, &cluster); err != nil {
 		resp.Diagnostics.AddError("Error updating cluster", err.Error())
 		return
 	}
 
-	updateClusterResourceModel(&plan, cluster)
-
-	diags = resp.State.Set(ctx, plan)
-	resp.Diagnostics.Append(diags...)
+	updateClusterResourceModel(&plan, &cluster)
+	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
 }
 
 // Delete deletes a cluster from Pomerium Zero.
 func (r *ClusterResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state ClusterResourceModel
-	// Read Terraform configuration data into the model
-	diags := req.State.Get(ctx, &state)
-	resp.Diagnostics.Append(diags...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// Delete the cluster
-	err := r.deleteCluster(ctx, state.ID.ValueString())
-	if err != nil {
+	if err := r.client.delete(ctx, r.client.clusterURL(state.ID.ValueString())); err != nil {
 		resp.Diagnostics.AddError("Error deleting cluster", err.Error())
-		return
 	}
 }
 
-// ImportState imports an existing cluster into Terraform.
+// ImportState imports an existing cluster into Terraform by name.
 func (r *ClusterResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	// The import ID is now expected to be the cluster name
-	name := req.ID
-
-	// Find the cluster by name
-	cluster, err := r.findClusterByName(ctx, name)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Error importing cluster",
-			fmt.Sprintf("Could not find cluster with name %s: %s", name, err),
-		)
+	var clusters []Cluster
+	if err := r.client.get(ctx, r.client.clustersURL(), &clusters); err != nil {
+		resp.Diagnostics.AddError("Error importing cluster", fmt.Sprintf("Could not list clusters: %s", err))
 		return
 	}
 
-	// Set all the attributes
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), cluster.ID)...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), cluster.Name)...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("namespace_id"), cluster.NamespaceID)...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("domain"), cluster.Domain)...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("fqdn"), cluster.FQDN)...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("auto_detect_ip_address"), cluster.AutoDetectIPAddress)...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("created_at"), cluster.CreatedAt)...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("updated_at"), cluster.UpdatedAt)...)
-}
-
-// ExportState exports the state of a cluster.
-func (r *ClusterResource) findClusterByName(ctx context.Context, name string) (*Cluster, error) {
-	// Fetch all clusters
-	url := fmt.Sprintf("%s/organizations/%s/clusters", apiBaseURL, r.organizationID)
-	// Create a new request
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("error creating request: %w", err)
-	}
-	// Set the Authorization header
-	req.Header.Set("Authorization", "Bearer "+r.token)
-	// Make the request
-	resp, err := r.client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("error making request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
-	}
-
-	var clusters []Cluster
-	if err := json.NewDecoder(resp.Body).Decode(&clusters); err != nil {
-		return nil, fmt.Errorf("error decoding response: %w", err)
-	}
-
-	for _, cluster := range clusters {
-		if cluster.Name == name {
-			return &cluster, nil
+	for _, c := range clusters {
+		if c.Name == req.ID {
+			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), c.ID)...)
+			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), c.Name)...)
+			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("namespace_id"), c.NamespaceID)...)
+			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("domain"), c.Domain)...)
+			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("fqdn"), c.FQDN)...)
+			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("auto_detect_ip_address"), c.AutoDetectIPAddress)...)
+			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("created_at"), c.CreatedAt)...)
+			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("updated_at"), c.UpdatedAt)...)
+			return
 		}
 	}
 
-	return nil, fmt.Errorf("cluster with name %s not found", name)
+	resp.Diagnostics.AddError(
+		"Error importing cluster",
+		fmt.Sprintf("Could not find cluster with name %q", req.ID),
+	)
 }
 
-// createCluster creates a new cluster in Pomerium Zero.
-func (r *ClusterResource) createCluster(ctx context.Context, plan ClusterResourceModel) (*Cluster, error) {
-	// Assemble the API URL
-	url := fmt.Sprintf("%s/organizations/%s/clusters", apiBaseURL, r.organizationID)
-
-	body := map[string]interface{}{
-		"name":   plan.Name.ValueString(),
-		"domain": plan.Domain.ValueString(),
-	}
-
-	jsonBody, err := json.Marshal(body)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling cluster: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "POST", url, strings.NewReader(string(jsonBody)))
-	if err != nil {
-		return nil, fmt.Errorf("error creating request: %w", err)
-	}
-
-	req.Header.Set("Authorization", "Bearer "+r.token)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := r.client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("error making request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusCreated {
-		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
-	}
-
-	var cluster Cluster
-	if err := json.NewDecoder(resp.Body).Decode(&cluster); err != nil {
-		return nil, fmt.Errorf("error decoding response: %w", err)
-	}
-
-	return &cluster, nil
-}
-
-// getCluster fetches a cluster from Pomerium Zero.
-func (r *ClusterResource) getCluster(ctx context.Context, id string) (*Cluster, error) {
-	// Assemble the API URL
-	url := fmt.Sprintf("%s/organizations/%s/clusters/%s", apiBaseURL, r.organizationID, id)
-
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("error creating request: %w", err)
-	}
-
-	req.Header.Set("Authorization", "Bearer "+r.token)
-
-	resp, err := r.client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("error making request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
-		return nil, fmt.Errorf("cluster not found")
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
-	}
-
-	var cluster Cluster
-	if err := json.NewDecoder(resp.Body).Decode(&cluster); err != nil {
-		return nil, fmt.Errorf("error decoding response: %w", err)
-	}
-
-	return &cluster, nil
-}
-
-// updateCluster updates a cluster in Pomerium Zero.
-func (r *ClusterResource) updateCluster(ctx context.Context, plan ClusterResourceModel) (*Cluster, error) {
-	// Assemble the API URL
-	url := fmt.Sprintf("%s/organizations/%s/clusters/%s", apiBaseURL, r.organizationID, plan.ID.ValueString())
-
-	body := map[string]interface{}{
-		"name":   plan.Name.ValueString(),
-		"domain": plan.Domain.ValueString(),
-	}
-
-	jsonBody, err := json.Marshal(body)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling cluster: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "PUT", url, strings.NewReader(string(jsonBody)))
-	if err != nil {
-		return nil, fmt.Errorf("error creating request: %w", err)
-	}
-
-	req.Header.Set("Authorization", "Bearer "+r.token)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := r.client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("error making request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
-	}
-
-	var cluster Cluster
-	if err := json.NewDecoder(resp.Body).Decode(&cluster); err != nil {
-		return nil, fmt.Errorf("error decoding response: %w", err)
-	}
-
-	return &cluster, nil
-}
-
-// deleteCluster deletes a cluster from Pomerium Zero.
-func (r *ClusterResource) deleteCluster(ctx context.Context, id string) error {
-	url := fmt.Sprintf("%s/organizations/%s/clusters/%s", apiBaseURL, r.organizationID, id)
-
-	req, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
-	if err != nil {
-		return fmt.Errorf("error creating request: %w", err)
-	}
-
-	req.Header.Set("Authorization", "Bearer "+r.token)
-
-	resp, err := r.client.Do(req)
-	if err != nil {
-		return fmt.Errorf("error making request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
-	}
-
-	return nil
-}
-
-// updateClusterResourceModel updates the ClusterResourceModel with the data from the Cluster.
+// updateClusterResourceModel updates the ClusterResourceModel with data from a Cluster.
 func updateClusterResourceModel(model *ClusterResourceModel, cluster *Cluster) {
 	model.ID = types.StringValue(cluster.ID)
 	model.Name = types.StringValue(cluster.Name)
