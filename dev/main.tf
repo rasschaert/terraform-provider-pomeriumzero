@@ -64,6 +64,23 @@ resource "pomeriumzero_route" "verify" {
   policy_ids = [pomeriumzero_policy.allow_authenticated.id]
 }
 
+# This route reproduces the empty-string drift bug (fixed in 1.5.2):
+# prefix and prefix_rewrite are explicitly set to "" rather than omitted.
+# The API treats "" and absent identically, so without the reconciliation fix
+# the mapper would return null after apply, causing:
+#   "provider produced inconsistent result: .prefix was "" but now null"
+resource "pomeriumzero_route" "verify_empty_strings" {
+  name         = "dev-tf-verify-empty-strings"
+  from         = "https://dev-tf-verify-empty-strings.${data.pomeriumzero_cluster.default.fqdn}"
+  to           = ["https://verify.pomerium.com"]
+  namespace_id = data.pomeriumzero_cluster.default.namespace_id
+
+  prefix         = ""
+  prefix_rewrite = ""
+
+  policy_ids = [pomeriumzero_policy.allow_authenticated.id]
+}
+
 # ---------------------------------------------------------------------------
 # Service account
 # ---------------------------------------------------------------------------
@@ -88,6 +105,10 @@ output "policy_id" {
 
 output "route_id" {
   value = pomeriumzero_route.verify.id
+}
+
+output "route_empty_strings_id" {
+  value = pomeriumzero_route.verify_empty_strings.id
 }
 
 output "service_account_id" {

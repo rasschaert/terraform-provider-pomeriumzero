@@ -382,6 +382,163 @@ func TestUpdateRouteRequest_DelegatesToCreate(t *testing.T) {
 	}
 }
 
+func TestMapRouteResponseToModel_NewComputedFields(t *testing.T) {
+	ctx := context.Background()
+	base := map[string]interface{}{
+		"id":          "route-1",
+		"name":        "r",
+		"namespaceId": "ns",
+		"from":        "https://a.example.com",
+	}
+
+	t.Run("enforced_policy_ids present", func(t *testing.T) {
+		resp := copyMap(base)
+		resp["enforcedPolicyIds"] = []interface{}{"pol-enforced-1", "pol-enforced-2"}
+		model := mustMapRoute(t, ctx, resp)
+		if len(model.EnforcedPolicyIDs.Elements()) != 2 {
+			t.Errorf("EnforcedPolicyIDs: got %d elements, want 2", len(model.EnforcedPolicyIDs.Elements()))
+		}
+	})
+
+	t.Run("enforced_policy_ids absent produces empty list", func(t *testing.T) {
+		model := mustMapRoute(t, ctx, base)
+		if model.EnforcedPolicyIDs.IsNull() {
+			t.Error("EnforcedPolicyIDs: should not be null when absent, expected empty list")
+		}
+		if len(model.EnforcedPolicyIDs.Elements()) != 0 {
+			t.Errorf("EnforcedPolicyIDs: got %d elements, want 0", len(model.EnforcedPolicyIDs.Elements()))
+		}
+	})
+
+	t.Run("created_at and updated_at are mapped", func(t *testing.T) {
+		resp := copyMap(base)
+		resp["createdAt"] = "2024-01-01T00:00:00Z"
+		resp["updatedAt"] = "2024-06-01T12:00:00Z"
+		model := mustMapRoute(t, ctx, resp)
+		if model.CreatedAt.ValueString() != "2024-01-01T00:00:00Z" {
+			t.Errorf("CreatedAt: got %q, want %q", model.CreatedAt.ValueString(), "2024-01-01T00:00:00Z")
+		}
+		if model.UpdatedAt.ValueString() != "2024-06-01T12:00:00Z" {
+			t.Errorf("UpdatedAt: got %q, want %q", model.UpdatedAt.ValueString(), "2024-06-01T12:00:00Z")
+		}
+	})
+
+	t.Run("created_at and updated_at absent are null", func(t *testing.T) {
+		model := mustMapRoute(t, ctx, base)
+		if !model.CreatedAt.IsNull() {
+			t.Errorf("CreatedAt: expected null when absent, got %q", model.CreatedAt.ValueString())
+		}
+		if !model.UpdatedAt.IsNull() {
+			t.Errorf("UpdatedAt: expected null when absent, got %q", model.UpdatedAt.ValueString())
+		}
+	})
+
+	t.Run("mcp present is JSON-encoded string", func(t *testing.T) {
+		resp := copyMap(base)
+		resp["mcp"] = map[string]interface{}{"enabled": true}
+		model := mustMapRoute(t, ctx, resp)
+		if model.MCP.IsNull() {
+			t.Error("MCP: expected non-null when present")
+		}
+		if model.MCP.ValueString() != `{"enabled":true}` {
+			t.Errorf("MCP: got %q, want %q", model.MCP.ValueString(), `{"enabled":true}`)
+		}
+	})
+
+	t.Run("mcp absent is null", func(t *testing.T) {
+		model := mustMapRoute(t, ctx, base)
+		if !model.MCP.IsNull() {
+			t.Errorf("MCP: expected null when absent, got %q", model.MCP.ValueString())
+		}
+	})
+}
+
+func TestReconcileEmptyStrings(t *testing.T) {
+	// This is the regression test for the empty-string prefix/prefix_rewrite fix.
+	// When the API omits a field (mapper → null) but the reference had an explicit "",
+	// reconcileEmptyStrings must preserve the "" so Terraform never sees a diff.
+
+	t.Run("null mapped with empty ref keeps empty string", func(t *testing.T) {
+		ref := &RouteResourceModel{
+			Prefix:                  types.StringValue(""),
+			PrefixRewrite:           types.StringValue(""),
+			TLSDownstreamServerName: types.StringValue(""),
+		}
+		newState := &RouteResourceModel{
+			Prefix:                  types.StringNull(),
+			PrefixRewrite:           types.StringNull(),
+			TLSDownstreamServerName: types.StringNull(),
+		}
+		reconcileEmptyStrings(newState, ref)
+
+		if newState.Prefix.IsNull() || newState.Prefix.ValueString() != "" {
+			t.Errorf("Prefix: expected empty string, got null=%v value=%q", newState.Prefix.IsNull(), newState.Prefix.ValueString())
+		}
+		if newState.PrefixRewrite.IsNull() || newState.PrefixRewrite.ValueString() != "" {
+			t.Errorf("PrefixRewrite: expected empty string, got null=%v value=%q", newState.PrefixRewrite.IsNull(), newState.PrefixRewrite.ValueString())
+		}
+		if newState.TLSDownstreamServerName.IsNull() || newState.TLSDownstreamServerName.ValueString() != "" {
+			t.Errorf("TLSDownstreamServerName: expected empty string, got null=%v value=%q", newState.TLSDownstreamServerName.IsNull(), newState.TLSDownstreamServerName.ValueString())
+		}
+	})
+
+	t.Run("null mapped with null ref stays null", func(t *testing.T) {
+		ref := &RouteResourceModel{
+			Prefix:        types.StringNull(),
+			PrefixRewrite: types.StringNull(),
+		}
+		newState := &RouteResourceModel{
+			Prefix:        types.StringNull(),
+			PrefixRewrite: types.StringNull(),
+		}
+		reconcileEmptyStrings(newState, ref)
+
+		if !newState.Prefix.IsNull() {
+			t.Errorf("Prefix: expected null when ref is also null, got %q", newState.Prefix.ValueString())
+		}
+		if !newState.PrefixRewrite.IsNull() {
+			t.Errorf("PrefixRewrite: expected null when ref is also null, got %q", newState.PrefixRewrite.ValueString())
+		}
+	})
+
+	t.Run("non-empty mapped value is not overwritten", func(t *testing.T) {
+		ref := &RouteResourceModel{
+			Prefix: types.StringValue(""),
+		}
+		newState := &RouteResourceModel{
+			Prefix: types.StringValue("/api"),
+		}
+		reconcileEmptyStrings(newState, ref)
+
+		if newState.Prefix.ValueString() != "/api" {
+			t.Errorf("Prefix: expected /api to be preserved, got %q", newState.Prefix.ValueString())
+		}
+	})
+}
+
+func TestCreateRouteRequest_EmptyStringFieldsOmitted(t *testing.T) {
+	// When prefix or prefix_rewrite is explicitly set to "" in config,
+	// the API treats it the same as absent, so it must not be sent in the request.
+	to, _ := types.ListValueFrom(context.Background(), types.StringType, []string{"https://backend:8080"})
+	model := &RouteResourceModel{
+		Name:          types.StringValue("r"),
+		NamespaceID:   types.StringValue("ns"),
+		From:          types.StringValue("https://a.example.com"),
+		To:            to,
+		Prefix:        types.StringValue(""),
+		PrefixRewrite: types.StringValue(""),
+	}
+
+	req := createRouteRequest(model)
+
+	if _, exists := req["prefix"]; exists {
+		t.Error("prefix should not be present in request when value is empty string")
+	}
+	if _, exists := req["prefixRewrite"]; exists {
+		t.Error("prefixRewrite should not be present in request when value is empty string")
+	}
+}
+
 // copyMap creates a shallow copy of a map[string]interface{}.
 func copyMap(m map[string]interface{}) map[string]interface{} {
 	out := make(map[string]interface{}, len(m))

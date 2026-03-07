@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 // errNotFound is returned by apiClient methods when the API responds with 404.
@@ -22,12 +24,32 @@ type apiClient struct {
 // do executes an HTTP request, setting the Authorization header and returning
 // the response body. The caller is responsible for interpreting the status code.
 func (c *apiClient) do(ctx context.Context, method, url string, body io.Reader) (*http.Response, error) {
+	var bodyBytes []byte
+	if body != nil {
+		var err error
+		bodyBytes, err = io.ReadAll(body)
+		if err != nil {
+			return nil, fmt.Errorf("error reading request body: %w", err)
+		}
+		tflog.Trace(ctx, "API request", map[string]interface{}{
+			"method": method,
+			"url":    url,
+			"body":   string(bodyBytes),
+		})
+		body = bytes.NewReader(bodyBytes)
+	} else {
+		tflog.Trace(ctx, "API request", map[string]interface{}{
+			"method": method,
+			"url":    url,
+		})
+	}
+
 	req, err := http.NewRequestWithContext(ctx, method, url, body)
 	if err != nil {
 		return nil, fmt.Errorf("error creating request: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+c.token)
-	if body != nil {
+	if bodyBytes != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
 	resp, err := c.http.Do(req)
@@ -46,14 +68,22 @@ func (c *apiClient) get(ctx context.Context, url string, out interface{}) error 
 	}
 	defer resp.Body.Close()
 
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("error reading response: %w", err)
+	}
+	tflog.Trace(ctx, "API response", map[string]interface{}{
+		"status": resp.StatusCode,
+		"body":   string(body),
+	})
+
 	if resp.StatusCode == http.StatusNotFound {
 		return errNotFound
 	}
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("unexpected status %d: %s", resp.StatusCode, body)
 	}
-	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+	if err := json.Unmarshal(body, out); err != nil {
 		return fmt.Errorf("error decoding response: %w", err)
 	}
 	return nil
@@ -76,6 +106,10 @@ func (c *apiClient) post(ctx context.Context, url string, in interface{}, expect
 	if err != nil {
 		return fmt.Errorf("error reading response: %w", err)
 	}
+	tflog.Trace(ctx, "API response", map[string]interface{}{
+		"status": resp.StatusCode,
+		"body":   string(body),
+	})
 	if resp.StatusCode != expectedStatus {
 		return fmt.Errorf("unexpected status %d: %s", resp.StatusCode, body)
 	}
@@ -103,6 +137,10 @@ func (c *apiClient) put(ctx context.Context, url string, in interface{}, out int
 	if err != nil {
 		return fmt.Errorf("error reading response: %w", err)
 	}
+	tflog.Trace(ctx, "API response", map[string]interface{}{
+		"status": resp.StatusCode,
+		"body":   string(body),
+	})
 	if resp.StatusCode == http.StatusNotFound {
 		return errNotFound
 	}
@@ -125,8 +163,12 @@ func (c *apiClient) delete(ctx context.Context, url string) error {
 	}
 	defer resp.Body.Close()
 
+	body, _ := io.ReadAll(resp.Body)
+	tflog.Trace(ctx, "API response", map[string]interface{}{
+		"status": resp.StatusCode,
+		"body":   string(body),
+	})
 	if resp.StatusCode != http.StatusNoContent {
-		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("unexpected status %d: %s", resp.StatusCode, body)
 	}
 	return nil

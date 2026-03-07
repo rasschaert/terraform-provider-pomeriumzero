@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -30,14 +30,17 @@ type ClusterResource struct {
 
 // ClusterResourceModel describes the resource data model.
 type ClusterResourceModel struct {
-	ID                  types.String `tfsdk:"id"`
-	Name                types.String `tfsdk:"name"`
-	NamespaceID         types.String `tfsdk:"namespace_id"`
-	Domain              types.String `tfsdk:"domain"`
-	FQDN                types.String `tfsdk:"fqdn"`
-	AutoDetectIPAddress types.String `tfsdk:"auto_detect_ip_address"`
-	CreatedAt           types.String `tfsdk:"created_at"`
-	UpdatedAt           types.String `tfsdk:"updated_at"`
+	ID                     types.String `tfsdk:"id"`
+	Name                   types.String `tfsdk:"name"`
+	NamespaceID            types.String `tfsdk:"namespace_id"`
+	Domain                 types.String `tfsdk:"domain"`
+	FQDN                   types.String `tfsdk:"fqdn"`
+	AutoDetectIPAddress    types.String `tfsdk:"auto_detect_ip_address"`
+	CreatedAt              types.String `tfsdk:"created_at"`
+	UpdatedAt              types.String `tfsdk:"updated_at"`
+	Flavor                 types.String `tfsdk:"flavor"`
+	HasFailingHealthChecks types.Bool   `tfsdk:"has_failing_health_checks"`
+	OnboardingStatus       types.String `tfsdk:"onboarding_status"`
 }
 
 // Metadata sets the resource type name for the ClusterResource.
@@ -80,10 +83,37 @@ func (r *ClusterResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 			"created_at": schema.StringAttribute{
 				MarkdownDescription: "The timestamp when the cluster was created.",
 				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"updated_at": schema.StringAttribute{
 				MarkdownDescription: "The timestamp when the cluster was last updated.",
 				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					useStateUnlessUpdating{},
+				},
+			},
+			"flavor": schema.StringAttribute{
+				MarkdownDescription: "The cluster flavor (e.g. `standard`).",
+				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"has_failing_health_checks": schema.BoolAttribute{
+				MarkdownDescription: "Whether the cluster currently has failing health checks.",
+				Computed:            true,
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"onboarding_status": schema.StringAttribute{
+				MarkdownDescription: "The onboarding status of the cluster (e.g. `in_progress`, `complete`).",
+				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 		},
 	}
@@ -194,14 +224,9 @@ func (r *ClusterResource) ImportState(ctx context.Context, req resource.ImportSt
 
 	for _, c := range clusters {
 		if c.Name == req.ID {
-			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), c.ID)...)
-			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), c.Name)...)
-			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("namespace_id"), c.NamespaceID)...)
-			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("domain"), c.Domain)...)
-			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("fqdn"), c.FQDN)...)
-			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("auto_detect_ip_address"), c.AutoDetectIPAddress)...)
-			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("created_at"), c.CreatedAt)...)
-			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("updated_at"), c.UpdatedAt)...)
+			var m ClusterResourceModel
+			updateClusterResourceModel(&m, &c)
+			resp.Diagnostics.Append(resp.State.Set(ctx, &m)...)
 			return
 		}
 	}
@@ -222,4 +247,7 @@ func updateClusterResourceModel(model *ClusterResourceModel, cluster *Cluster) {
 	model.AutoDetectIPAddress = types.StringValue(cluster.AutoDetectIPAddress)
 	model.CreatedAt = types.StringValue(cluster.CreatedAt)
 	model.UpdatedAt = types.StringValue(cluster.UpdatedAt)
+	model.Flavor = types.StringValue(cluster.Flavor)
+	model.HasFailingHealthChecks = types.BoolValue(cluster.HasFailingHealthChecks)
+	model.OnboardingStatus = types.StringValue(cluster.OnboardingStatus)
 }

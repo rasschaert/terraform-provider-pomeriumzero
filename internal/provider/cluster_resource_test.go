@@ -8,14 +8,17 @@ import (
 
 func TestUpdateClusterResourceModel(t *testing.T) {
 	cluster := &Cluster{
-		ID:                  "cluster-123",
-		Name:                "my-cluster",
-		NamespaceID:         "ns-456",
-		Domain:              "my-cluster",
-		FQDN:                "my-cluster.pomerium.app",
-		AutoDetectIPAddress: "1.2.3.4",
-		CreatedAt:           "2024-01-01T00:00:00Z",
-		UpdatedAt:           "2024-06-01T12:00:00Z",
+		ID:                     "cluster-123",
+		Name:                   "my-cluster",
+		NamespaceID:            "ns-456",
+		Domain:                 "my-cluster",
+		FQDN:                   "my-cluster.pomerium.app",
+		AutoDetectIPAddress:    "1.2.3.4",
+		CreatedAt:              "2024-01-01T00:00:00Z",
+		UpdatedAt:              "2024-06-01T12:00:00Z",
+		Flavor:                 "standard",
+		HasFailingHealthChecks: true,
+		OnboardingStatus:       "complete",
 	}
 
 	var model ClusterResourceModel
@@ -34,6 +37,11 @@ func TestUpdateClusterResourceModel(t *testing.T) {
 		{"AutoDetectIPAddress", model.AutoDetectIPAddress.ValueString(), "1.2.3.4"},
 		{"CreatedAt", model.CreatedAt.ValueString(), "2024-01-01T00:00:00Z"},
 		{"UpdatedAt", model.UpdatedAt.ValueString(), "2024-06-01T12:00:00Z"},
+		{"Flavor", model.Flavor.ValueString(), "standard"},
+		{"OnboardingStatus", model.OnboardingStatus.ValueString(), "complete"},
+	}
+	if !model.HasFailingHealthChecks.ValueBool() {
+		t.Error("HasFailingHealthChecks: got false, want true")
 	}
 	for _, c := range checks {
 		if c.got != c.want {

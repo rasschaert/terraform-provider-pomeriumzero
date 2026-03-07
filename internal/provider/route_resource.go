@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -10,11 +11,13 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
+
 
 // Ensure the implementation satisfies the expected interfaces.
 var (
@@ -52,6 +55,10 @@ type RouteResourceModel struct {
 	Prefix                                    types.String `tfsdk:"prefix"`
 	PrefixRewrite                             types.String `tfsdk:"prefix_rewrite"`
 	KubernetesServiceAccountToken             types.String `tfsdk:"kubernetes_service_account_token"`
+	EnforcedPolicyIDs                         types.List   `tfsdk:"enforced_policy_ids"`
+	CreatedAt                                 types.String `tfsdk:"created_at"`
+	UpdatedAt                                 types.String `tfsdk:"updated_at"`
+	MCP                                       types.String `tfsdk:"mcp"`
 }
 
 // Metadata sets the resource type name for the RouteResource.
@@ -162,6 +169,35 @@ func (r *RouteResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
+			"enforced_policy_ids": schema.ListAttribute{
+				ElementType:         types.StringType,
+				Computed:            true,
+				MarkdownDescription: "List of policy IDs that are enforced on this route at the namespace or organization level (read-only).",
+				PlanModifiers: []planmodifier.List{
+					listplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"created_at": schema.StringAttribute{
+				Computed:            true,
+				MarkdownDescription: "The timestamp when the route was created.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"updated_at": schema.StringAttribute{
+				Computed:            true,
+				MarkdownDescription: "The timestamp when the route was last updated.",
+				PlanModifiers: []planmodifier.String{
+					useStateUnlessUpdating{},
+				},
+			},
+			"mcp": schema.StringAttribute{
+				Computed:            true,
+				MarkdownDescription: "MCP (Model Context Protocol) configuration for this route, JSON-encoded. Null when not configured.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
 		},
 	}
 }
@@ -180,6 +216,23 @@ func (r *RouteResource) Configure(_ context.Context, req resource.ConfigureReque
 		return
 	}
 	r.client = client
+}
+
+// reconcileEmptyStrings fixes up optional string fields where the API treats ""
+// and absent identically. When the API omits a field (mapper → null) but the
+// reference model (plan or prior state) had an explicit empty string, we keep
+// the empty string so Terraform never sees a plan/state inconsistency.
+// This lets users write `prefix = ""` without triggering spurious diffs.
+func reconcileEmptyStrings(newState *RouteResourceModel, ref *RouteResourceModel) {
+	keep := func(mapped, reference types.String) types.String {
+		if mapped.IsNull() && !reference.IsNull() && reference.ValueString() == "" {
+			return reference
+		}
+		return mapped
+	}
+	newState.Prefix = keep(newState.Prefix, ref.Prefix)
+	newState.PrefixRewrite = keep(newState.PrefixRewrite, ref.PrefixRewrite)
+	newState.TLSDownstreamServerName = keep(newState.TLSDownstreamServerName, ref.TLSDownstreamServerName)
 }
 
 // Create handles the creation of a new RouteResource.
@@ -201,6 +254,7 @@ func (r *RouteResource) Create(ctx context.Context, req resource.CreateRequest, 
 		resp.Diagnostics.AddError("Error reading route response", err.Error())
 		return
 	}
+	reconcileEmptyStrings(&newState, &plan)
 	resp.Diagnostics.Append(resp.State.Set(ctx, newState)...)
 }
 
@@ -228,6 +282,7 @@ func (r *RouteResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		resp.Diagnostics.AddError("Error reading route response", err.Error())
 		return
 	}
+	reconcileEmptyStrings(&newState, &state)
 	resp.Diagnostics.Append(resp.State.Set(ctx, newState)...)
 }
 
@@ -250,6 +305,7 @@ func (r *RouteResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		resp.Diagnostics.AddError("Error reading route response", err.Error())
 		return
 	}
+	reconcileEmptyStrings(&newState, &plan)
 	resp.Diagnostics.Append(resp.State.Set(ctx, newState)...)
 }
 
@@ -309,10 +365,10 @@ func createRouteRequest(model *RouteResourceModel) map[string]interface{} {
 		model.PolicyIDs.ElementsAs(context.Background(), &policyIDs, false)
 		req["policyIds"] = policyIDs
 	}
-	if !model.Prefix.IsNull() {
+	if !model.Prefix.IsNull() && model.Prefix.ValueString() != "" {
 		req["prefix"] = model.Prefix.ValueString()
 	}
-	if !model.PrefixRewrite.IsNull() {
+	if !model.PrefixRewrite.IsNull() && model.PrefixRewrite.ValueString() != "" {
 		req["prefixRewrite"] = model.PrefixRewrite.ValueString()
 	}
 	if !model.KubernetesServiceAccountToken.IsNull() {
@@ -431,8 +487,29 @@ func mapRouteResponseToModel(ctx context.Context, apiResponse map[string]interfa
 	model.Prefix = toOptionalString("prefix")
 	model.PrefixRewrite = toOptionalString("prefixRewrite")
 	model.TLSDownstreamServerName = toOptionalString("tlsDownstreamServerName")
-	if v, ok := apiResponse["kubernetesServiceAccountToken"].(string); ok {
+	if v, ok := apiResponse["kubernetesServiceAccountToken"].(string); ok && v != "" {
 		model.KubernetesServiceAccountToken = types.StringValue(v)
+	}
+
+	// enforced_policy_ids: read-only, set by namespace/org policies
+	if ids, ok := apiResponse["enforcedPolicyIds"].([]interface{}); ok {
+		model.EnforcedPolicyIDs, _ = types.ListValueFrom(ctx, types.StringType, ids)
+	} else {
+		model.EnforcedPolicyIDs, _ = types.ListValueFrom(ctx, types.StringType, []string{})
+	}
+
+	model.CreatedAt = toOptionalString("createdAt")
+	model.UpdatedAt = toOptionalString("updatedAt")
+
+	// mcp: JSON-encode non-null values; store null when absent or null
+	if mcpVal := apiResponse["mcp"]; mcpVal != nil {
+		if mcpJSON, err := json.Marshal(mcpVal); err == nil {
+			model.MCP = types.StringValue(string(mcpJSON))
+		} else {
+			model.MCP = types.StringNull()
+		}
+	} else {
+		model.MCP = types.StringNull()
 	}
 
 	return model, nil

@@ -92,7 +92,11 @@ resource "pomeriumzero_route" "kubernetes_api" {
 
 ### Read-Only
 
+- `created_at` (String) The timestamp when the route was created.
+- `enforced_policy_ids` (List of String) Policy IDs enforced on this route at the namespace or organization level, independent of `policy_ids`.
 - `id` (String) The unique identifier of the route.
+- `mcp` (String) MCP (Model Context Protocol) configuration for this route, JSON-encoded. Null when not configured.
+- `updated_at` (String) The timestamp when the route was last updated.
 
 ## Import
 

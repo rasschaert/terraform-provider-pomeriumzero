@@ -72,6 +72,32 @@ func TestUpdatePolicyResourceModel(t *testing.T) {
 	if model.PPL.ValueString() != string(ppl) {
 		t.Errorf("PPL: got %q, want %q", model.PPL.ValueString(), string(ppl))
 	}
+	if model.CreatedAt.ValueString() != "" {
+		t.Errorf("CreatedAt: got %q, want empty (not set in policy)", model.CreatedAt.ValueString())
+	}
+	if model.UpdatedAt.ValueString() != "" {
+		t.Errorf("UpdatedAt: got %q, want empty (not set in policy)", model.UpdatedAt.ValueString())
+	}
+}
+
+func TestUpdatePolicyResourceModel_Timestamps(t *testing.T) {
+	policy := &Policy{
+		ID:          "pol-1",
+		NamespaceID: "ns-1",
+		PPL:         json.RawMessage(`{}`),
+		CreatedAt:   "2024-01-01T00:00:00Z",
+		UpdatedAt:   "2024-06-01T12:00:00Z",
+	}
+
+	var model PolicyResourceModel
+	updatePolicyResourceModel(&model, policy)
+
+	if model.CreatedAt.ValueString() != "2024-01-01T00:00:00Z" {
+		t.Errorf("CreatedAt: got %q, want %q", model.CreatedAt.ValueString(), "2024-01-01T00:00:00Z")
+	}
+	if model.UpdatedAt.ValueString() != "2024-06-01T12:00:00Z" {
+		t.Errorf("UpdatedAt: got %q, want %q", model.UpdatedAt.ValueString(), "2024-06-01T12:00:00Z")
+	}
 }
 
 func TestUpdatePolicyResourceModel_NullStringFieldsViaStringOrEmpty(t *testing.T) {

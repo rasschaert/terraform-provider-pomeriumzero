@@ -10,6 +10,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
@@ -38,6 +40,8 @@ type PolicyResourceModel struct {
 	NamespaceID types.String `tfsdk:"namespace_id"`
 	PPL         types.String `tfsdk:"ppl"`
 	Remediation types.String `tfsdk:"remediation"`
+	CreatedAt   types.String `tfsdk:"created_at"`
+	UpdatedAt   types.String `tfsdk:"updated_at"`
 }
 
 // Metadata sets the resource type name for the PolicyResource.
@@ -81,6 +85,20 @@ func (r *PolicyResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 			"remediation": schema.StringAttribute{
 				Required:            true,
 				MarkdownDescription: "Instructions for remediating policy violations.",
+			},
+			"created_at": schema.StringAttribute{
+				Computed:            true,
+				MarkdownDescription: "The timestamp when the policy was created.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"updated_at": schema.StringAttribute{
+				Computed:            true,
+				MarkdownDescription: "The timestamp when the policy was last updated.",
+				PlanModifiers: []planmodifier.String{
+					useStateUnlessUpdating{},
+				},
 			},
 		},
 	}
@@ -248,6 +266,8 @@ func updatePolicyResourceModel(model *PolicyResourceModel, policy *Policy) {
 	model.NamespaceID = types.StringValue(policy.NamespaceID)
 	model.PPL = types.StringValue(normalizePPL(policy.PPL))
 	model.Remediation = types.StringValue(stringOrEmpty(policy.Remediation))
+	model.CreatedAt = types.StringValue(policy.CreatedAt)
+	model.UpdatedAt = types.StringValue(policy.UpdatedAt)
 }
 
 // normalizePPL round-trips the PPL JSON through interface{} to produce a canonical

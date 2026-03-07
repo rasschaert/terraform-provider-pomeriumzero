@@ -69,7 +69,9 @@ resource "pomeriumzero_policy" "allow_foobar_group_members" {
 
 ### Read-Only
 
+- `created_at` (String) The timestamp when the policy was created.
 - `id` (String) The unique identifier of the policy.
+- `updated_at` (String) The timestamp when the policy was last updated.
 
 ## Import
 

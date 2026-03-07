@@ -25,14 +25,17 @@ type ClusterDataSource struct {
 
 // ClusterDataSourceModel describes the data source data model.
 type ClusterDataSourceModel struct {
-	ID                  types.String `tfsdk:"id"`
-	Name                types.String `tfsdk:"name"`
-	NamespaceID         types.String `tfsdk:"namespace_id"`
-	Domain              types.String `tfsdk:"domain"`
-	FQDN                types.String `tfsdk:"fqdn"`
-	AutoDetectIPAddress types.String `tfsdk:"auto_detect_ip_address"`
-	CreatedAt           types.String `tfsdk:"created_at"`
-	UpdatedAt           types.String `tfsdk:"updated_at"`
+	ID                     types.String `tfsdk:"id"`
+	Name                   types.String `tfsdk:"name"`
+	NamespaceID            types.String `tfsdk:"namespace_id"`
+	Domain                 types.String `tfsdk:"domain"`
+	FQDN                   types.String `tfsdk:"fqdn"`
+	AutoDetectIPAddress    types.String `tfsdk:"auto_detect_ip_address"`
+	CreatedAt              types.String `tfsdk:"created_at"`
+	UpdatedAt              types.String `tfsdk:"updated_at"`
+	Flavor                 types.String `tfsdk:"flavor"`
+	HasFailingHealthChecks types.Bool   `tfsdk:"has_failing_health_checks"`
+	OnboardingStatus       types.String `tfsdk:"onboarding_status"`
 }
 
 // Metadata sets the data source type name for the ClusterDataSource.
@@ -75,6 +78,18 @@ func (d *ClusterDataSource) Schema(_ context.Context, _ datasource.SchemaRequest
 			},
 			"updated_at": schema.StringAttribute{
 				MarkdownDescription: "Last update timestamp",
+				Computed:            true,
+			},
+			"flavor": schema.StringAttribute{
+				MarkdownDescription: "The cluster flavor (e.g. `standard`).",
+				Computed:            true,
+			},
+			"has_failing_health_checks": schema.BoolAttribute{
+				MarkdownDescription: "Whether the cluster currently has failing health checks.",
+				Computed:            true,
+			},
+			"onboarding_status": schema.StringAttribute{
+				MarkdownDescription: "The onboarding status of the cluster (e.g. `in_progress`, `complete`).",
 				Computed:            true,
 			},
 		},
@@ -120,6 +135,9 @@ func (d *ClusterDataSource) Read(ctx context.Context, req datasource.ReadRequest
 			data.AutoDetectIPAddress = types.StringValue(cluster.AutoDetectIPAddress)
 			data.CreatedAt = types.StringValue(cluster.CreatedAt)
 			data.UpdatedAt = types.StringValue(cluster.UpdatedAt)
+			data.Flavor = types.StringValue(cluster.Flavor)
+			data.HasFailingHealthChecks = types.BoolValue(cluster.HasFailingHealthChecks)
+			data.OnboardingStatus = types.StringValue(cluster.OnboardingStatus)
 
 			tflog.Trace(ctx, "read a cluster data source")
 			resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
