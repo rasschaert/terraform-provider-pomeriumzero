@@ -91,7 +91,7 @@ func (r *ClusterResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				MarkdownDescription: "The timestamp when the cluster was last updated.",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
-					useStateUnlessUpdating{},
+					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"flavor": schema.StringAttribute{
@@ -175,7 +175,10 @@ func (r *ClusterResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 
+	prevUpdatedAt := state.UpdatedAt
 	updateClusterResourceModel(&state, &cluster)
+	// Preserve the state's updated_at on Read — see route_resource.go for rationale.
+	state.UpdatedAt = prevUpdatedAt
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -197,7 +200,14 @@ func (r *ClusterResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
+	var state ClusterResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	updateClusterResourceModel(&plan, &cluster)
+	plan.UpdatedAt = state.UpdatedAt
 	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
 }
 

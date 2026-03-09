@@ -97,7 +97,7 @@ func (r *PolicyResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 				Computed:            true,
 				MarkdownDescription: "The timestamp when the policy was last updated.",
 				PlanModifiers: []planmodifier.String{
-					useStateUnlessUpdating{},
+					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 		},
@@ -139,6 +139,7 @@ func (r *PolicyResource) Create(ctx context.Context, req resource.CreateRequest,
 }
 
 // Read retrieves the current state of a PolicyResource from the API.
+
 func (r *PolicyResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state PolicyResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -156,7 +157,10 @@ func (r *PolicyResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return
 	}
 
+	prevUpdatedAt := state.UpdatedAt
 	updatePolicyResourceModel(&state, &policy)
+	// Preserve the state's updated_at on Read — see route_resource.go for rationale.
+	state.UpdatedAt = prevUpdatedAt
 	resp.Diagnostics.Append(resp.State.Set(ctx, state)...)
 }
 
@@ -186,6 +190,7 @@ func (r *PolicyResource) Update(ctx context.Context, req resource.UpdateRequest,
 	}
 
 	updatePolicyResourceModel(&plan, &policy)
+	plan.UpdatedAt = state.UpdatedAt
 	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
 }
 

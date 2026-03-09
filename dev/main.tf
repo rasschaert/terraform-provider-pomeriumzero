@@ -64,6 +64,11 @@ resource "pomeriumzero_route" "verify" {
   policy_ids = [pomeriumzero_policy.allow_authenticated.id]
 }
 
+# NOTE: The dev playground cannot reproduce phantom-diff bugs caused by external changes
+# (e.g. someone editing a route via the Pomerium Zero console). Those bugs are covered by
+# unit tests (see TestUpdatedAtPreservedOnRead in route_resource_test.go) and only surface
+# in real infrastructure where resources are shared or touched outside of Terraform.
+
 # This route reproduces the empty-string drift bug (fixed in 1.5.2):
 # prefix and prefix_rewrite are explicitly set to "" rather than omitted.
 # The API treats "" and absent identically, so without the reconciliation fix

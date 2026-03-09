@@ -116,7 +116,6 @@ func (r *RouteResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 			},
 			"pass_identity_headers": schema.BoolAttribute{
 				Optional:            true,
-				Computed:            true,
 				MarkdownDescription: "If set to `true`, passes identity headers to the upstream service.",
 			},
 			"preserve_host_header": schema.BoolAttribute{
@@ -162,12 +161,8 @@ func (r *RouteResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 			},
 			"kubernetes_service_account_token": schema.StringAttribute{
 				Optional:            true,
-				Computed:            true,
 				MarkdownDescription: "The Kubernetes service account token to use for authentication.",
 				Sensitive:           true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
-				},
 			},
 			"enforced_policy_ids": schema.ListAttribute{
 				ElementType:         types.StringType,
@@ -188,7 +183,7 @@ func (r *RouteResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				Computed:            true,
 				MarkdownDescription: "The timestamp when the route was last updated.",
 				PlanModifiers: []planmodifier.String{
-					useStateUnlessUpdating{},
+					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"mcp": schema.StringAttribute{
@@ -255,6 +250,7 @@ func (r *RouteResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 	reconcileEmptyStrings(&newState, &plan)
+	newState.PassIdentityHeaders = plan.PassIdentityHeaders
 	resp.Diagnostics.Append(resp.State.Set(ctx, newState)...)
 }
 
@@ -282,7 +278,22 @@ func (r *RouteResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		resp.Diagnostics.AddError("Error reading route response", err.Error())
 		return
 	}
-	reconcileEmptyStrings(&newState, &state)
+	// Preserve optional string fields where the API returns "" for absent values,
+	// making null and "" indistinguishable. We keep whatever was last written by
+	// Create/Update (which uses the plan value) so that explicit "" in config
+	// doesn't drift to null on the next Read.
+	newState.Prefix = state.Prefix
+	newState.PrefixRewrite = state.PrefixRewrite
+	newState.TLSDownstreamServerName = state.TLSDownstreamServerName
+	// Preserve the state's updated_at value on Read. updated_at is server-managed
+	// and changes whenever the resource is touched externally. Overwriting it from
+	// the API response would cause a plan diff on every refresh, even when nothing
+	// in the config changed. We only record the API's updated_at after Create/Update.
+	newState.UpdatedAt = state.UpdatedAt
+	// pass_identity_headers is Optional-only. The API always returns false when
+	// unset, so we can't distinguish "user set false" from "user didn't set it".
+	// Preserve the state value to avoid null vs false drift on Read.
+	newState.PassIdentityHeaders = state.PassIdentityHeaders
 	resp.Diagnostics.Append(resp.State.Set(ctx, newState)...)
 }
 
@@ -300,12 +311,20 @@ func (r *RouteResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		return
 	}
 
+	var state RouteResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	newState, err := mapRouteResponseToModel(ctx, apiResponse)
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading route response", err.Error())
 		return
 	}
 	reconcileEmptyStrings(&newState, &plan)
+	newState.UpdatedAt = state.UpdatedAt
+	newState.PassIdentityHeaders = plan.PassIdentityHeaders
 	resp.Diagnostics.Append(resp.State.Set(ctx, newState)...)
 }
 
@@ -489,6 +508,8 @@ func mapRouteResponseToModel(ctx context.Context, apiResponse map[string]interfa
 	model.TLSDownstreamServerName = toOptionalString("tlsDownstreamServerName")
 	if v, ok := apiResponse["kubernetesServiceAccountToken"].(string); ok && v != "" {
 		model.KubernetesServiceAccountToken = types.StringValue(v)
+	} else {
+		model.KubernetesServiceAccountToken = types.StringNull()
 	}
 
 	// enforced_policy_ids: read-only, set by namespace/org policies
