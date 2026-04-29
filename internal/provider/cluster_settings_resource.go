@@ -10,6 +10,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	resource_schema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	resource_schema_planmodifier "github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	resource_schema_boolplanmodifier "github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
+	resource_schema_float64planmodifier "github.com/hashicorp/terraform-plugin-framework/resource/schema/float64planmodifier"
 	resource_schema_stringplanmodifier "github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
@@ -77,7 +79,11 @@ func (r *ClusterSettingsResource) Schema(_ context.Context, _ resource.SchemaReq
 			},
 			"auto_apply_changesets": resource_schema.BoolAttribute{
 				Optional:            true,
+				Computed:            true,
 				MarkdownDescription: "Whether to automatically apply changesets.",
+				PlanModifiers: []resource_schema_planmodifier.Bool{
+					resource_schema_boolplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"cookie_expire": resource_schema.StringAttribute{
 				Optional:            true,
@@ -85,7 +91,11 @@ func (r *ClusterSettingsResource) Schema(_ context.Context, _ resource.SchemaReq
 			},
 			"cookie_http_only": resource_schema.BoolAttribute{
 				Optional:            true,
+				Computed:            true,
 				MarkdownDescription: "Whether cookies should be HTTP only.",
+				PlanModifiers: []resource_schema_planmodifier.Bool{
+					resource_schema_boolplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"cookie_name": resource_schema.StringAttribute{
 				Optional:            true,
@@ -126,7 +136,11 @@ func (r *ClusterSettingsResource) Schema(_ context.Context, _ resource.SchemaReq
 			},
 			"pass_identity_headers": resource_schema.BoolAttribute{
 				Optional:            true,
+				Computed:            true,
 				MarkdownDescription: "Whether to pass identity headers to upstream services.",
+				PlanModifiers: []resource_schema_planmodifier.Bool{
+					resource_schema_boolplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"proxy_log_level": resource_schema.StringAttribute{
 				Optional:            true,
@@ -134,7 +148,11 @@ func (r *ClusterSettingsResource) Schema(_ context.Context, _ resource.SchemaReq
 			},
 			"skip_xff_append": resource_schema.BoolAttribute{
 				Optional:            true,
+				Computed:            true,
 				MarkdownDescription: "Whether to skip appending X-Forwarded-For headers.",
+				PlanModifiers: []resource_schema_planmodifier.Bool{
+					resource_schema_boolplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"timeout_idle": resource_schema.StringAttribute{
 				Optional:            true,
@@ -150,7 +168,11 @@ func (r *ClusterSettingsResource) Schema(_ context.Context, _ resource.SchemaReq
 			},
 			"tracing_sample_rate": resource_schema.Float64Attribute{
 				Optional:            true,
+				Computed:            true,
 				MarkdownDescription: "The sampling rate for tracing.",
+				PlanModifiers: []resource_schema_planmodifier.Float64{
+					resource_schema_float64planmodifier.UseStateForUnknown(),
+				},
 			},
 			"codec_type": resource_schema.StringAttribute{
 				Optional:            true,
@@ -244,7 +266,24 @@ func (r *ClusterSettingsResource) Read(ctx context.Context, req resource.ReadReq
 	// The API returns a settings-specific ID; preserve the cluster ID in state.
 	settings.ID = state.ID.ValueString()
 
+	// Save the prior state values for bool/float fields the API doesn't echo
+	// back when their value is the zero value (false / 0.0). The mapper converts
+	// those to null, which would cause null-vs-false drift on the next plan.
+	// We restore these after the mapper runs so the prior state is preserved.
+	priorAutoApplyChangesets := state.AutoApplyChangesets
+	priorCookieHttpOnly := state.CookieHttpOnly
+	priorPassIdentityHeaders := state.PassIdentityHeaders
+	priorSkipXffAppend := state.SkipXffAppend
+	priorTracingSampleRate := state.TracingSampleRate
+
 	updateClusterSettingsResourceModel(&state, &settings)
+
+	state.AutoApplyChangesets = priorAutoApplyChangesets
+	state.CookieHttpOnly = priorCookieHttpOnly
+	state.PassIdentityHeaders = priorPassIdentityHeaders
+	state.SkipXffAppend = priorSkipXffAppend
+	state.TracingSampleRate = priorTracingSampleRate
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -270,7 +309,24 @@ func (r *ClusterSettingsResource) Update(ctx context.Context, req resource.Updat
 	// Preserve the cluster ID (the API may return a different settings ID).
 	settings.ID = plan.ID.ValueString()
 
+	// Save plan values for bool/float fields the API doesn't echo back when
+	// zero (false / 0.0). The mapper converts them to null, which would cause
+	// "inconsistent result after apply" since the plan had a known value.
+	// Restore the plan values so the post-apply state matches the plan.
+	priorAutoApplyChangesets := plan.AutoApplyChangesets
+	priorCookieHttpOnly := plan.CookieHttpOnly
+	priorPassIdentityHeaders := plan.PassIdentityHeaders
+	priorSkipXffAppend := plan.SkipXffAppend
+	priorTracingSampleRate := plan.TracingSampleRate
+
 	updateClusterSettingsResourceModel(&plan, &settings)
+
+	plan.AutoApplyChangesets = priorAutoApplyChangesets
+	plan.CookieHttpOnly = priorCookieHttpOnly
+	plan.PassIdentityHeaders = priorPassIdentityHeaders
+	plan.SkipXffAppend = priorSkipXffAppend
+	plan.TracingSampleRate = priorTracingSampleRate
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
 }
 
