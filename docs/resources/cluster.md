@@ -35,6 +35,7 @@ resource "pomeriumzero_cluster" "default" {
 ### Read-Only
 
 - `auto_detect_ip_address` (String) The auto-detected IP address of the cluster. This is determined by Pomerium Zero.
+- `cluster_token` (String, Sensitive) The cluster identity token (refresh token) used by the Pomerium proxy to authenticate to the Pomerium Zero API. Set in the `BOOTSTRAP_SERVICE_ACCOUNT_TOKEN`/`POMERIUM_ZERO_TOKEN` env var on the proxy. The API only emits this value at cluster create time and provides no way to retrieve it later. Resources created by Terraform capture it automatically. Imported clusters have no token in state — the only way to obtain a token for a pre-existing cluster is to recreate it.
 - `created_at` (String) The timestamp when the cluster was created.
 - `flavor` (String) The cluster flavor (e.g. `standard`).
 - `fqdn` (String) The fully qualified domain name (FQDN) of the cluster. This is automatically generated based on the cluster's domain.

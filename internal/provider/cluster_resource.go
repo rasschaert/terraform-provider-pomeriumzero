@@ -41,6 +41,15 @@ type ClusterResourceModel struct {
 	Flavor                 types.String `tfsdk:"flavor"`
 	HasFailingHealthChecks types.Bool   `tfsdk:"has_failing_health_checks"`
 	OnboardingStatus       types.String `tfsdk:"onboarding_status"`
+	ClusterToken           types.String `tfsdk:"cluster_token"`
+}
+
+// ClusterCreateResponse is the response body from POST .../clusters. It embeds
+// the cluster fields and adds the one-time `refreshToken` (the cluster identity
+// token, used by the Pomerium proxy to authenticate to the Pomerium Zero API).
+type ClusterCreateResponse struct {
+	Cluster
+	RefreshToken string `json:"refreshToken"`
 }
 
 // Metadata sets the resource type name for the ClusterResource.
@@ -115,6 +124,14 @@ func (r *ClusterResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
+			"cluster_token": schema.StringAttribute{
+				MarkdownDescription: "The cluster identity token (refresh token) used by the Pomerium proxy to authenticate to the Pomerium Zero API. Set in the `BOOTSTRAP_SERVICE_ACCOUNT_TOKEN`/`POMERIUM_ZERO_TOKEN` env var on the proxy. The API only emits this value at cluster create time and provides no way to retrieve it later. Resources created by Terraform capture it automatically. Imported clusters have no token in state — the only way to obtain a token for a pre-existing cluster is to recreate it.",
+				Computed:            true,
+				Sensitive:           true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
 		},
 	}
 }
@@ -147,13 +164,14 @@ func (r *ClusterResource) Create(ctx context.Context, req resource.CreateRequest
 		"name":   plan.Name.ValueString(),
 		"domain": plan.Domain.ValueString(),
 	}
-	var cluster Cluster
-	if err := r.client.post(ctx, r.client.clustersURL(), body, http.StatusCreated, &cluster); err != nil {
+	var created ClusterCreateResponse
+	if err := r.client.post(ctx, r.client.clustersURL(), body, http.StatusCreated, &created); err != nil {
 		resp.Diagnostics.AddError("Error creating cluster", err.Error())
 		return
 	}
 
-	updateClusterResourceModel(&plan, &cluster)
+	updateClusterResourceModel(&plan, &created.Cluster)
+	plan.ClusterToken = types.StringValue(created.RefreshToken)
 	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
 }
 
@@ -176,9 +194,12 @@ func (r *ClusterResource) Read(ctx context.Context, req resource.ReadRequest, re
 	}
 
 	prevUpdatedAt := state.UpdatedAt
+	prevToken := state.ClusterToken
 	updateClusterResourceModel(&state, &cluster)
 	// Preserve the state's updated_at on Read — see route_resource.go for rationale.
 	state.UpdatedAt = prevUpdatedAt
+	// The GET cluster endpoint does not return the cluster token; preserve it from state.
+	state.ClusterToken = prevToken
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -186,6 +207,12 @@ func (r *ClusterResource) Read(ctx context.Context, req resource.ReadRequest, re
 func (r *ClusterResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan ClusterResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	var state ClusterResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -200,14 +227,9 @@ func (r *ClusterResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
-	var state ClusterResourceModel
-	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
 	updateClusterResourceModel(&plan, &cluster)
 	plan.UpdatedAt = state.UpdatedAt
+	plan.ClusterToken = state.ClusterToken
 	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
 }
 
@@ -237,6 +259,12 @@ func (r *ClusterResource) ImportState(ctx context.Context, req resource.ImportSt
 			var m ClusterResourceModel
 			updateClusterResourceModel(&m, &c)
 			resp.Diagnostics.Append(resp.State.Set(ctx, &m)...)
+			resp.Diagnostics.AddWarning(
+				"Cluster token not available after import",
+				"The Pomerium Zero API only returns the cluster identity token at create time. "+
+					"The imported cluster's `cluster_token` is null in state and cannot be retrieved. "+
+					"To obtain a token for this cluster you must recreate it (taint + apply, or destroy + apply).",
+			)
 			return
 		}
 	}

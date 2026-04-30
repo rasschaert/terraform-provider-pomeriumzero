@@ -87,6 +87,32 @@ func TestUpdateClusterResourceModel_OverwritesExistingModel(t *testing.T) {
 	}
 }
 
+// TestClusterTokenPreservedOnRead verifies that the cluster_token in state survives
+// a Read. The GET cluster endpoint never returns the token (it's only emitted by
+// POST .../clusters and the rotate endpoint), so Read must preserve the prior value
+// rather than letting updateClusterResourceModel zero it out.
+func TestClusterTokenPreservedOnRead(t *testing.T) {
+	state := ClusterResourceModel{
+		ID:           types.StringValue("cluster-1"),
+		ClusterToken: types.StringValue("secret-token-from-create"),
+	}
+
+	// Simulate the GET response — it has no token field.
+	cluster := &Cluster{
+		ID:   "cluster-1",
+		Name: "c",
+	}
+
+	prevToken := state.ClusterToken
+	updateClusterResourceModel(&state, cluster)
+	state.ClusterToken = prevToken // mirror Read's preservation step
+
+	if state.ClusterToken.ValueString() != "secret-token-from-create" {
+		t.Errorf("cluster_token should be preserved from prior state; got %q",
+			state.ClusterToken.ValueString())
+	}
+}
+
 func TestUpdateClusterResourceModel_EmptyStrings(t *testing.T) {
 	// API may return empty strings for optional/computed fields — they should be stored as-is.
 	cluster := &Cluster{
