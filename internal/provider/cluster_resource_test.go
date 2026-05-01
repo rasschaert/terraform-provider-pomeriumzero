@@ -87,6 +87,44 @@ func TestUpdateClusterResourceModel_OverwritesExistingModel(t *testing.T) {
 	}
 }
 
+// TestBuildClusterRequestBody verifies the create/update body shape:
+//   - `name` is always included (Required).
+//   - `flavor` and `manualOverrideIpAddress` are included only when set.
+//   - Server-assigned fields (`domain`, etc.) are never sent — the API rejects them.
+func TestBuildClusterRequestBody(t *testing.T) {
+	t.Run("minimal", func(t *testing.T) {
+		m := &ClusterResourceModel{Name: types.StringValue("c1")}
+		got := buildClusterRequestBody(m)
+		if got["name"] != "c1" {
+			t.Errorf("name: got %v, want c1", got["name"])
+		}
+		if _, ok := got["domain"]; ok {
+			t.Error("domain must not be in request body (server-assigned)")
+		}
+		if _, ok := got["flavor"]; ok {
+			t.Error("flavor must be omitted when null")
+		}
+		if _, ok := got["manualOverrideIpAddress"]; ok {
+			t.Error("manualOverrideIpAddress must be omitted when null")
+		}
+	})
+
+	t.Run("with optionals", func(t *testing.T) {
+		m := &ClusterResourceModel{
+			Name:                    types.StringValue("c1"),
+			Flavor:                  types.StringValue("hosted"),
+			ManualOverrideIPAddress: types.StringValue("1.2.3.4"),
+		}
+		got := buildClusterRequestBody(m)
+		if got["flavor"] != "hosted" {
+			t.Errorf("flavor: got %v, want hosted", got["flavor"])
+		}
+		if got["manualOverrideIpAddress"] != "1.2.3.4" {
+			t.Errorf("manualOverrideIpAddress: got %v, want 1.2.3.4", got["manualOverrideIpAddress"])
+		}
+	})
+}
+
 // TestClusterTokenPreservedOnRead verifies that the cluster_token in state survives
 // a Read. The GET cluster endpoint never returns the token (it's only emitted by
 // POST .../clusters and the rotate endpoint), so Read must preserve the prior value
