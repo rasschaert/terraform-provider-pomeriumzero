@@ -4,17 +4,18 @@ import "encoding/json"
 
 // Cluster represents a Pomerium Zero cluster
 type Cluster struct {
-	ID                    string `json:"id"`
-	Name                  string `json:"name"`
-	NamespaceID           string `json:"namespaceId"`
-	Domain                string `json:"domain"`
-	FQDN                  string `json:"fqdn"`
-	AutoDetectIPAddress   string `json:"autoDetectIpAddress"`
-	CreatedAt             string `json:"createdAt"`
-	UpdatedAt             string `json:"updatedAt"`
-	Flavor                string `json:"flavor"`
-	HasFailingHealthChecks bool   `json:"hasFailingHealthChecks"`
-	OnboardingStatus      string `json:"onboardingStatus"`
+	ID                      string `json:"id"`
+	Name                    string `json:"name"`
+	NamespaceID             string `json:"namespaceId"`
+	Domain                  string `json:"domain"`
+	FQDN                    string `json:"fqdn"`
+	AutoDetectIPAddress     string `json:"autoDetectIpAddress"`
+	ManualOverrideIPAddress string `json:"manualOverrideIpAddress,omitempty"`
+	CreatedAt               string `json:"createdAt"`
+	UpdatedAt               string `json:"updatedAt"`
+	Flavor                  string `json:"flavor"`
+	HasFailingHealthChecks  bool   `json:"hasFailingHealthChecks"`
+	OnboardingStatus        string `json:"onboardingStatus"`
 }
 
 // Policy represents a Pomerium Zero policy

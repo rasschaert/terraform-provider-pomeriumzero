@@ -30,18 +30,19 @@ type ClusterResource struct {
 
 // ClusterResourceModel describes the resource data model.
 type ClusterResourceModel struct {
-	ID                     types.String `tfsdk:"id"`
-	Name                   types.String `tfsdk:"name"`
-	NamespaceID            types.String `tfsdk:"namespace_id"`
-	Domain                 types.String `tfsdk:"domain"`
-	FQDN                   types.String `tfsdk:"fqdn"`
-	AutoDetectIPAddress    types.String `tfsdk:"auto_detect_ip_address"`
-	CreatedAt              types.String `tfsdk:"created_at"`
-	UpdatedAt              types.String `tfsdk:"updated_at"`
-	Flavor                 types.String `tfsdk:"flavor"`
-	HasFailingHealthChecks types.Bool   `tfsdk:"has_failing_health_checks"`
-	OnboardingStatus       types.String `tfsdk:"onboarding_status"`
-	ClusterToken           types.String `tfsdk:"cluster_token"`
+	ID                      types.String `tfsdk:"id"`
+	Name                    types.String `tfsdk:"name"`
+	NamespaceID             types.String `tfsdk:"namespace_id"`
+	Domain                  types.String `tfsdk:"domain"`
+	FQDN                    types.String `tfsdk:"fqdn"`
+	AutoDetectIPAddress     types.String `tfsdk:"auto_detect_ip_address"`
+	ManualOverrideIPAddress types.String `tfsdk:"manual_override_ip_address"`
+	CreatedAt               types.String `tfsdk:"created_at"`
+	UpdatedAt               types.String `tfsdk:"updated_at"`
+	Flavor                  types.String `tfsdk:"flavor"`
+	HasFailingHealthChecks  types.Bool   `tfsdk:"has_failing_health_checks"`
+	OnboardingStatus        types.String `tfsdk:"onboarding_status"`
+	ClusterToken            types.String `tfsdk:"cluster_token"`
 }
 
 // ClusterCreateResponse is the response body from POST .../clusters. It embeds
@@ -78,8 +79,11 @@ func (r *ClusterResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				Computed:            true,
 			},
 			"domain": schema.StringAttribute{
-				MarkdownDescription: "The domain associated with this cluster. This is used to generate the FQDN for the cluster.",
-				Required:            true,
+				MarkdownDescription: "The domain associated with this cluster, used to generate the FQDN. The Pomerium Zero API assigns this automatically (adjective-animal-NNNN format) and rejects user-chosen values, so this field is read-only.",
+				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"fqdn": schema.StringAttribute{
 				MarkdownDescription: "The fully qualified domain name (FQDN) of the cluster. This is automatically generated based on the cluster's domain.",
@@ -88,6 +92,10 @@ func (r *ClusterResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 			"auto_detect_ip_address": schema.StringAttribute{
 				MarkdownDescription: "The auto-detected IP address of the cluster. This is determined by Pomerium Zero.",
 				Computed:            true,
+			},
+			"manual_override_ip_address": schema.StringAttribute{
+				MarkdownDescription: "Manually-specified IP address for the cluster. If unset, Pomerium Zero uses the auto-detected address.",
+				Optional:            true,
 			},
 			"created_at": schema.StringAttribute{
 				MarkdownDescription: "The timestamp when the cluster was created.",
@@ -104,7 +112,8 @@ func (r *ClusterResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				},
 			},
 			"flavor": schema.StringAttribute{
-				MarkdownDescription: "The cluster flavor (e.g. `standard`).",
+				MarkdownDescription: "The cluster flavor: `standard` or `hosted`. Defaults to `standard` if unset.",
+				Optional:            true,
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
@@ -160,10 +169,7 @@ func (r *ClusterResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
-	body := map[string]string{
-		"name":   plan.Name.ValueString(),
-		"domain": plan.Domain.ValueString(),
-	}
+	body := buildClusterRequestBody(&plan)
 	var created ClusterCreateResponse
 	if err := r.client.post(ctx, r.client.clustersURL(), body, http.StatusCreated, &created); err != nil {
 		resp.Diagnostics.AddError("Error creating cluster", err.Error())
@@ -217,10 +223,7 @@ func (r *ClusterResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
-	body := map[string]string{
-		"name":   plan.Name.ValueString(),
-		"domain": plan.Domain.ValueString(),
-	}
+	body := buildClusterRequestBody(&plan)
 	var cluster Cluster
 	if err := r.client.put(ctx, r.client.clusterURL(plan.ID.ValueString()), body, &cluster); err != nil {
 		resp.Diagnostics.AddError("Error updating cluster", err.Error())
@@ -283,9 +286,31 @@ func updateClusterResourceModel(model *ClusterResourceModel, cluster *Cluster) {
 	model.Domain = types.StringValue(cluster.Domain)
 	model.FQDN = types.StringValue(cluster.FQDN)
 	model.AutoDetectIPAddress = types.StringValue(cluster.AutoDetectIPAddress)
+	if cluster.ManualOverrideIPAddress != "" {
+		model.ManualOverrideIPAddress = types.StringValue(cluster.ManualOverrideIPAddress)
+	} else {
+		model.ManualOverrideIPAddress = types.StringNull()
+	}
 	model.CreatedAt = types.StringValue(cluster.CreatedAt)
 	model.UpdatedAt = types.StringValue(cluster.UpdatedAt)
 	model.Flavor = types.StringValue(cluster.Flavor)
 	model.HasFailingHealthChecks = types.BoolValue(cluster.HasFailingHealthChecks)
 	model.OnboardingStatus = types.StringValue(cluster.OnboardingStatus)
+}
+
+// buildClusterRequestBody assembles the JSON body for create/update calls,
+// containing only the user-settable ClusterProperties fields. Server-assigned
+// fields (domain, fqdn, etc.) are excluded — the API rejects requests that
+// attempt to set them.
+func buildClusterRequestBody(model *ClusterResourceModel) map[string]interface{} {
+	body := map[string]interface{}{
+		"name": model.Name.ValueString(),
+	}
+	if !model.Flavor.IsNull() && !model.Flavor.IsUnknown() {
+		body["flavor"] = model.Flavor.ValueString()
+	}
+	if !model.ManualOverrideIPAddress.IsNull() && !model.ManualOverrideIPAddress.IsUnknown() {
+		body["manualOverrideIpAddress"] = model.ManualOverrideIPAddress.ValueString()
+	}
+	return body
 }
