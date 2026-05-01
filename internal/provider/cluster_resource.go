@@ -79,7 +79,8 @@ func (r *ClusterResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				Computed:            true,
 			},
 			"domain": schema.StringAttribute{
-				MarkdownDescription: "The domain associated with this cluster, used to generate the FQDN. The Pomerium Zero API assigns this automatically (adjective-animal-NNNN format) and rejects user-chosen values, so this field is read-only.",
+				MarkdownDescription: "The subdomain slug used to generate the cluster's FQDN. The Pomerium Zero API rejects arbitrary user-chosen slugs — only values minted by the API's `generateSubdomainName` endpoint are accepted. The provider mints one transparently at create time, so leave this unset for new clusters. You may pin a previously-minted slug (e.g. for a cluster that was first created elsewhere) by setting it explicitly.",
+				Optional:            true,
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
@@ -169,7 +170,22 @@ func (r *ClusterResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
+	// The API requires `domain` in the create body, but only accepts slugs it
+	// has minted via generateSubdomainName. If the user did not pin a slug,
+	// mint one transparently.
+	if plan.Domain.IsNull() || plan.Domain.IsUnknown() || plan.Domain.ValueString() == "" {
+		var minted struct {
+			Name string `json:"name"`
+		}
+		if err := r.client.get(ctx, r.client.generateSubdomainURL(), &minted); err != nil {
+			resp.Diagnostics.AddError("Error generating cluster subdomain", err.Error())
+			return
+		}
+		plan.Domain = types.StringValue(minted.Name)
+	}
+
 	body := buildClusterRequestBody(&plan)
+	body["domain"] = plan.Domain.ValueString()
 	var created ClusterCreateResponse
 	if err := r.client.post(ctx, r.client.clustersURL(), body, http.StatusCreated, &created); err != nil {
 		resp.Diagnostics.AddError("Error creating cluster", err.Error())
