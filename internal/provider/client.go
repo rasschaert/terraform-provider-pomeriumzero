@@ -180,6 +180,13 @@ func (c *apiClient) clustersURL() string {
 	return fmt.Sprintf("%s/organizations/%s/clusters", apiBaseURL, c.organizationID)
 }
 
+// generateSubdomainURL returns the org-scoped (via bearer token) endpoint that
+// mints a subdomain slug. The Pomerium Zero API rejects user-chosen domains on
+// cluster create — only slugs returned by this endpoint are accepted.
+func (c *apiClient) generateSubdomainURL() string {
+	return fmt.Sprintf("%s/generateSubdomainName", apiBaseURL)
+}
+
 func (c *apiClient) clusterURL(id string) string {
 	return fmt.Sprintf("%s/organizations/%s/clusters/%s", apiBaseURL, c.organizationID, id)
 }
