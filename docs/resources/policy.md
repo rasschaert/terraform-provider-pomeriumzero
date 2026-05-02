@@ -77,6 +77,8 @@ resource "pomeriumzero_policy" "allow_foobar_group_members" {
 
 Import is supported using the following syntax:
 
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
 ```shell
 # Policies can be imported by specifying the policy ID. You can see the policy ID in the URL when viewing the policy in the Pomerium console.
 terraform import pomeriumzero_policy.allow_any_authenticated_user bHeymGDZrHpQeRtyTsQTXJvkHkt

@@ -39,6 +39,7 @@ func fullClusterSettingsModel() ClusterSettingsResourceModel {
 	secret := "s3cr3t"
 	return ClusterSettingsResourceModel{
 		ID:                           types.StringValue("cluster-123"),
+		ClusterID:                    types.StringValue("cluster-123"),
 		Address:                      types.StringValue(":443"),
 		AuthenticateServiceUrl:       types.StringValue("https://auth.example.com"),
 		AutoApplyChangesets:          types.BoolValue(true),
@@ -212,38 +213,6 @@ func TestUpdateClusterSettingsResourceModel_NonEmptyProxyLogLevel(t *testing.T) 
 	}
 	if model.ProxyLogLevel.ValueString() != "debug" {
 		t.Errorf("ProxyLogLevel: got %q, want %q", model.ProxyLogLevel.ValueString(), "debug")
-	}
-}
-
-// --- createClusterSettingsRequest ---
-
-func TestCreateClusterSettingsRequest_AllFields(t *testing.T) {
-	model := fullClusterSettingsModel()
-	req := createClusterSettingsRequest(model)
-
-	if req.Address != ":443" {
-		t.Errorf("Address: got %q, want %q", req.Address, ":443")
-	}
-	if req.AuthenticateServiceUrl != "https://auth.example.com" {
-		t.Errorf("AuthenticateServiceUrl: got %q, want %q", req.AuthenticateServiceUrl, "https://auth.example.com")
-	}
-	if !req.AutoApplyChangesets {
-		t.Error("AutoApplyChangesets: got false, want true")
-	}
-	if req.IdentityProvider != "google" {
-		t.Errorf("IdentityProvider: got %q, want %q", req.IdentityProvider, "google")
-	}
-	if req.IdentityProviderClientSecret != "s3cr3t" {
-		t.Errorf("IdentityProviderClientSecret: got %q, want %q", req.IdentityProviderClientSecret, "s3cr3t")
-	}
-	if req.ProxyLogLevel != "warn" {
-		t.Errorf("ProxyLogLevel: got %q, want %q", req.ProxyLogLevel, "warn")
-	}
-	if req.TracingSampleRate != 0.5 {
-		t.Errorf("TracingSampleRate: got %v, want 0.5", req.TracingSampleRate)
-	}
-	if req.CodecType != "auto" {
-		t.Errorf("CodecType: got %q, want %q", req.CodecType, "auto")
 	}
 }
 

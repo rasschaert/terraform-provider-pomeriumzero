@@ -4,9 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 
-	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	resource_schema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	resource_schema_planmodifier "github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -33,6 +31,7 @@ type ClusterSettingsResource struct {
 // ClusterSettingsResourceModel describes the resource data model.
 type ClusterSettingsResourceModel struct {
 	ID                           types.String  `tfsdk:"id"`
+	ClusterID                    types.String  `tfsdk:"cluster_id"`
 	Address                      types.String  `tfsdk:"address"`
 	AuthenticateServiceUrl       types.String  `tfsdk:"authenticate_service_url"`
 	AutoApplyChangesets          types.Bool    `tfsdk:"auto_apply_changesets"`
@@ -67,10 +66,17 @@ func (r *ClusterSettingsResource) Schema(_ context.Context, _ resource.SchemaReq
 		MarkdownDescription: "Manages settings for a Pomerium Zero Cluster. This resource allows you to configure various aspects of your cluster, including authentication, timeouts, and logging.",
 		Attributes: map[string]resource_schema.Attribute{
 			"id": resource_schema.StringAttribute{
-				MarkdownDescription: "The unique identifier of the cluster settings. This corresponds to the cluster ID.",
+				MarkdownDescription: "The unique identifier of the cluster settings. This is set to the cluster ID.",
 				Computed:            true,
 				PlanModifiers: []resource_schema_planmodifier.String{
 					resource_schema_stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"cluster_id": resource_schema.StringAttribute{
+				MarkdownDescription: "The ID of the cluster these settings apply to. The Pomerium Zero settings endpoints are nested under the cluster (`/clusters/{cluster_id}/settings`), so this must be set to the target cluster's ID — typically `pomeriumzero_cluster.<name>.id`.",
+				Required:            true,
+				PlanModifiers: []resource_schema_planmodifier.String{
+					resource_schema_stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"address": resource_schema.StringAttribute{
@@ -228,6 +234,12 @@ func (r *ClusterSettingsResource) Configure(_ context.Context, req resource.Conf
 }
 
 // Create handles the creation of a new ClusterSettingsResource.
+//
+// The Pomerium Zero API auto-creates a default settings record when a cluster
+// is created. There is no POST endpoint for cluster settings — the OpenAPI spec
+// defines only GET, PUT, and PATCH on /organizations/{org}/clusters/{cluster}/settings.
+// Therefore "create" from Terraform's perspective is really "PUT the desired
+// state onto the auto-created record" — the same operation as Update.
 func (r *ClusterSettingsResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan ClusterSettingsResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -235,14 +247,56 @@ func (r *ClusterSettingsResource) Create(ctx context.Context, req resource.Creat
 		return
 	}
 
-	settingsReq := createClusterSettingsRequest(plan)
+	// Normalize ProxyLogLevel (mirrors Update).
+	if !plan.ProxyLogLevel.IsNull() && plan.ProxyLogLevel.ValueString() == "" {
+		plan.ProxyLogLevel = types.StringNull()
+	}
+
+	clusterID := plan.ClusterID.ValueString()
+	settingsReq := updateClusterSettingsRequest(plan)
 	var settings ClusterSettings
-	if err := r.client.post(ctx, r.client.clusterSettingsURL(settingsReq.ID), settingsReq, http.StatusCreated, &settings); err != nil {
+	if err := r.client.put(ctx, r.client.clusterSettingsURL(clusterID), settingsReq, &settings); err != nil {
 		resp.Diagnostics.AddError("Error creating cluster settings", err.Error())
 		return
 	}
 
-	plan.ID = types.StringValue(settings.ID)
+	// At Create time, Optional+Computed fields the user didn't set are Unknown
+	// in the plan. We must replace them with concrete values before saving state
+	// (Terraform fails the apply if any plan value is still Unknown afterward).
+	// For fields that are Unknown in the plan we keep what the mapper produced
+	// (null, since the API zero values map to null). For fields the user did
+	// set, we restore the user's value — the mapper would otherwise clobber
+	// false/0 to null, which would mismatch the plan and trip Terraform's
+	// "inconsistent result after apply" check.
+	resolveBool := func(planVal types.Bool) types.Bool {
+		if planVal.IsUnknown() {
+			return types.BoolNull()
+		}
+		return planVal
+	}
+	resolveFloat := func(planVal types.Float64) types.Float64 {
+		if planVal.IsUnknown() {
+			return types.Float64Null()
+		}
+		return planVal
+	}
+	priorAutoApplyChangesets := resolveBool(plan.AutoApplyChangesets)
+	priorCookieHttpOnly := resolveBool(plan.CookieHttpOnly)
+	priorPassIdentityHeaders := resolveBool(plan.PassIdentityHeaders)
+	priorSkipXffAppend := resolveBool(plan.SkipXffAppend)
+	priorTracingSampleRate := resolveFloat(plan.TracingSampleRate)
+
+	updateClusterSettingsResourceModel(&plan, &settings)
+
+	// Use cluster_id as both `id` and `cluster_id` in state (the cluster ID is
+	// what every CRUD URL is keyed on).
+	plan.ID = types.StringValue(clusterID)
+	plan.AutoApplyChangesets = priorAutoApplyChangesets
+	plan.CookieHttpOnly = priorCookieHttpOnly
+	plan.PassIdentityHeaders = priorPassIdentityHeaders
+	plan.SkipXffAppend = priorSkipXffAppend
+	plan.TracingSampleRate = priorTracingSampleRate
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
 }
 
@@ -254,17 +308,23 @@ func (r *ClusterSettingsResource) Read(ctx context.Context, req resource.ReadReq
 		return
 	}
 
+	clusterID := state.ID.ValueString()
+	if !state.ClusterID.IsNull() && state.ClusterID.ValueString() != "" {
+		clusterID = state.ClusterID.ValueString()
+	}
 	var settings ClusterSettings
-	if err := r.client.get(ctx, r.client.clusterSettingsURL(state.ID.ValueString()), &settings); err != nil {
-		if errors.Is(err, errNotFound) {
+	if err := r.client.get(ctx, r.client.clusterSettingsURL(clusterID), &settings); err != nil {
+		// See cluster_resource.go Read for the rationale on treating 403 as gone.
+		if errors.Is(err, errNotFound) || errors.Is(err, errForbidden) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
 		resp.Diagnostics.AddError("Error reading cluster settings", err.Error())
 		return
 	}
-	// The API returns a settings-specific ID; preserve the cluster ID in state.
-	settings.ID = state.ID.ValueString()
+	// The API returns a settings-specific ID; we use cluster_id as both `id` and
+	// `cluster_id` in state (the cluster ID is what every CRUD URL is keyed on).
+	settings.ID = clusterID
 
 	// Save the prior state values for bool/float fields the API doesn't echo
 	// back when their value is the zero value (false / 0.0). The mapper converts
@@ -278,6 +338,8 @@ func (r *ClusterSettingsResource) Read(ctx context.Context, req resource.ReadReq
 
 	updateClusterSettingsResourceModel(&state, &settings)
 
+	state.ID = types.StringValue(clusterID)
+	state.ClusterID = types.StringValue(clusterID)
 	state.AutoApplyChangesets = priorAutoApplyChangesets
 	state.CookieHttpOnly = priorCookieHttpOnly
 	state.PassIdentityHeaders = priorPassIdentityHeaders
@@ -300,14 +362,15 @@ func (r *ClusterSettingsResource) Update(ctx context.Context, req resource.Updat
 		plan.ProxyLogLevel = types.StringNull()
 	}
 
+	clusterID := plan.ClusterID.ValueString()
 	settingsReq := updateClusterSettingsRequest(plan)
 	var settings ClusterSettings
-	if err := r.client.put(ctx, r.client.clusterSettingsURL(plan.ID.ValueString()), settingsReq, &settings); err != nil {
+	if err := r.client.put(ctx, r.client.clusterSettingsURL(clusterID), settingsReq, &settings); err != nil {
 		resp.Diagnostics.AddError("Error updating cluster settings", err.Error())
 		return
 	}
 	// Preserve the cluster ID (the API may return a different settings ID).
-	settings.ID = plan.ID.ValueString()
+	settings.ID = clusterID
 
 	// Save plan values for bool/float fields the API doesn't echo back when
 	// zero (false / 0.0). The mapper converts them to null, which would cause
@@ -321,6 +384,7 @@ func (r *ClusterSettingsResource) Update(ctx context.Context, req resource.Updat
 
 	updateClusterSettingsResourceModel(&plan, &settings)
 
+	plan.ID = types.StringValue(clusterID)
 	plan.AutoApplyChangesets = priorAutoApplyChangesets
 	plan.CookieHttpOnly = priorCookieHttpOnly
 	plan.PassIdentityHeaders = priorPassIdentityHeaders
@@ -331,36 +395,29 @@ func (r *ClusterSettingsResource) Update(ctx context.Context, req resource.Updat
 }
 
 // Delete handles the deletion of a ClusterSettingsResource.
-func (r *ClusterSettingsResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var state ClusterSettingsResourceModel
-	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	if err := r.client.delete(ctx, r.client.clusterSettingsURL(state.ID.ValueString())); err != nil {
-		resp.Diagnostics.AddError("Error deleting cluster settings", err.Error())
-	}
+//
+// The OpenAPI spec defines no DELETE on /organizations/{org}/clusters/{cluster}/settings.
+// Settings are auto-created with the cluster and deleted when the cluster is deleted —
+// they have no independent lifecycle. So Delete is a no-op: Terraform removes the
+// resource from state automatically when this function returns without error.
+func (r *ClusterSettingsResource) Delete(_ context.Context, _ resource.DeleteRequest, _ *resource.DeleteResponse) {
 }
 
 // ImportState fetches the current state of the resource from the API.
+// The import ID is the cluster ID (the settings resource is keyed by cluster).
 func (r *ClusterSettingsResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	id := req.ID
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), id)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
+	clusterID := req.ID
 
 	var settings ClusterSettings
-	if err := r.client.get(ctx, r.client.clusterSettingsURL(id), &settings); err != nil {
-		resp.Diagnostics.AddError("Error importing cluster settings", fmt.Sprintf("Unable to read cluster settings for %s: %s", id, err))
+	if err := r.client.get(ctx, r.client.clusterSettingsURL(clusterID), &settings); err != nil {
+		resp.Diagnostics.AddError("Error importing cluster settings", fmt.Sprintf("Unable to read cluster settings for %s: %s", clusterID, err))
 		return
 	}
-	settings.ID = id
 
 	var state ClusterSettingsResourceModel
 	updateClusterSettingsResourceModel(&state, &settings)
-	state.ID = types.StringValue(id)
+	state.ID = types.StringValue(clusterID)
+	state.ClusterID = types.StringValue(clusterID)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -424,34 +481,6 @@ func updateClusterSettingsResourceModel(model *ClusterSettingsResourceModel, set
 	}
 }
 
-// createClusterSettingsRequest builds a CreateClusterSettingsRequest from the model.
-func createClusterSettingsRequest(model ClusterSettingsResourceModel) CreateClusterSettingsRequest {
-	return CreateClusterSettingsRequest{
-		ID:                           model.ID.ValueString(),
-		Address:                      model.Address.ValueString(),
-		AuthenticateServiceUrl:       model.AuthenticateServiceUrl.ValueString(),
-		AutoApplyChangesets:          model.AutoApplyChangesets.ValueBool(),
-		CookieExpire:                 model.CookieExpire.ValueString(),
-		CookieHttpOnly:               model.CookieHttpOnly.ValueBool(),
-		CookieName:                   model.CookieName.ValueString(),
-		DefaultUpstreamTimeout:       model.DefaultUpstreamTimeout.ValueString(),
-		DNSLookupFamily:              model.DNSLookupFamily.ValueString(),
-		IdentityProvider:             model.IdentityProvider.ValueString(),
-		IdentityProviderClientId:     model.IdentityProviderClientId.ValueString(),
-		IdentityProviderClientSecret: model.IdentityProviderClientSecret.ValueString(),
-		IdentityProviderUrl:          model.IdentityProviderUrl.ValueString(),
-		LogLevel:                     model.LogLevel.ValueString(),
-		PassIdentityHeaders:          model.PassIdentityHeaders.ValueBool(),
-		ProxyLogLevel:                model.ProxyLogLevel.ValueString(),
-		SkipXffAppend:                model.SkipXffAppend.ValueBool(),
-		TimeoutIdle:                  model.TimeoutIdle.ValueString(),
-		TimeoutRead:                  model.TimeoutRead.ValueString(),
-		TimeoutWrite:                 model.TimeoutWrite.ValueString(),
-		TracingSampleRate:            model.TracingSampleRate.ValueFloat64(),
-		CodecType:                    model.CodecType.ValueString(),
-	}
-}
-
 // updateClusterSettingsRequest builds an UpdateClusterSettingsRequest from the model,
 // omitting nullable fields that are null in state.
 func updateClusterSettingsRequest(model ClusterSettingsResourceModel) UpdateClusterSettingsRequest {
@@ -498,33 +527,9 @@ func updateClusterSettingsRequest(model ClusterSettingsResourceModel) UpdateClus
 
 // API data structures
 
-// CreateClusterSettingsRequest is used to create new cluster settings.
-type CreateClusterSettingsRequest struct {
-	ID                           string  `json:"id"`
-	Address                      string  `json:"address,omitempty"`
-	AuthenticateServiceUrl       string  `json:"authenticateServiceUrl,omitempty"`
-	AutoApplyChangesets          bool    `json:"autoApplyChangesets,omitempty"`
-	CookieExpire                 string  `json:"cookieExpire,omitempty"`
-	CookieHttpOnly               bool    `json:"cookieHttpOnly,omitempty"`
-	CookieName                   string  `json:"cookieName,omitempty"`
-	DefaultUpstreamTimeout       string  `json:"defaultUpstreamTimeout,omitempty"`
-	DNSLookupFamily              string  `json:"dnsLookupFamily,omitempty"`
-	IdentityProvider             string  `json:"identityProvider,omitempty"`
-	IdentityProviderClientId     string  `json:"identityProviderClientId,omitempty"`
-	IdentityProviderClientSecret string  `json:"identityProviderClientSecret,omitempty"`
-	IdentityProviderUrl          string  `json:"identityProviderUrl,omitempty"`
-	LogLevel                     string  `json:"logLevel,omitempty"`
-	PassIdentityHeaders          bool    `json:"passIdentityHeaders,omitempty"`
-	ProxyLogLevel                string  `json:"proxyLogLevel,omitempty"`
-	SkipXffAppend                bool    `json:"skipXffAppend,omitempty"`
-	TimeoutIdle                  string  `json:"timeoutIdle,omitempty"`
-	TimeoutRead                  string  `json:"timeoutRead,omitempty"`
-	TimeoutWrite                 string  `json:"timeoutWrite,omitempty"`
-	TracingSampleRate            float64 `json:"tracingSampleRate,omitempty"`
-	CodecType                    string  `json:"codecType,omitempty"`
-}
-
 // UpdateClusterSettingsRequest is used to update existing cluster settings.
+// Per the OpenAPI spec, this is the body for both PUT (Create + Update) and
+// PATCH on /organizations/{org}/clusters/{cluster}/settings.
 type UpdateClusterSettingsRequest struct {
 	Address                      string  `json:"address,omitempty"`
 	AuthenticateServiceUrl       string  `json:"authenticateServiceUrl,omitempty"`

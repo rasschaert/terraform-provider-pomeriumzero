@@ -161,7 +161,8 @@ func (r *ServiceAccountResource) Read(ctx context.Context, req resource.ReadRequ
 
 	var sa ServiceAccount
 	if err := r.client.get(ctx, r.client.serviceAccountURL(state.ClusterID.ValueString(), state.ID.ValueString()), &sa); err != nil {
-		if errors.Is(err, errNotFound) {
+		// See cluster_resource.go Read for the rationale on treating 403 as gone.
+		if errors.Is(err, errNotFound) || errors.Is(err, errForbidden) {
 			resp.State.RemoveResource(ctx)
 			return
 		}

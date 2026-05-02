@@ -264,7 +264,8 @@ func (r *RouteResource) Read(ctx context.Context, req resource.ReadRequest, resp
 
 	var apiResponse map[string]interface{}
 	if err := r.client.get(ctx, r.client.routeURL(state.ID.ValueString()), &apiResponse); err != nil {
-		if errors.Is(err, errNotFound) {
+		// See cluster_resource.go Read for the rationale on treating 403 as gone.
+		if errors.Is(err, errNotFound) || errors.Is(err, errForbidden) {
 			tflog.Warn(ctx, fmt.Sprintf("Route %s no longer exists in Pomerium Zero", state.ID.ValueString()))
 			resp.State.RemoveResource(ctx)
 			return

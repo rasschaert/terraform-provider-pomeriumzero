@@ -30,7 +30,10 @@ data "pomeriumzero_cluster" "default" {
 - `auto_detect_ip_address` (String) Auto-detected IP address
 - `created_at` (String) Creation timestamp
 - `domain` (String) Cluster domain
+- `flavor` (String) The cluster flavor (e.g. `standard`).
 - `fqdn` (String) Cluster FQDN
+- `has_failing_health_checks` (Boolean) Whether the cluster currently has failing health checks.
 - `id` (String) Cluster identifier
 - `namespace_id` (String) Cluster namespace ID
+- `onboarding_status` (String) The onboarding status of the cluster (e.g. `in_progress`, `complete`).
 - `updated_at` (String) Last update timestamp
