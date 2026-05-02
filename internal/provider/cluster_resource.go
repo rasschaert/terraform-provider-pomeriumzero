@@ -207,7 +207,13 @@ func (r *ClusterResource) Read(ctx context.Context, req resource.ReadRequest, re
 
 	var cluster Cluster
 	if err := r.client.get(ctx, r.client.clusterURL(state.ID.ValueString()), &cluster); err != nil {
-		if errors.Is(err, errNotFound) {
+		// 403 is treated as "gone": the Pomerium Zero API returns 403 "viewer
+		// user required" for clusters that have been deleted (the auth check
+		// fires before the existence check). Removing from state lets Terraform
+		// plan a recreate. Operators review plans before applying, so an
+		// erroneous remove (e.g. a real auth misconfiguration) will surface
+		// as a destroy+create in the plan diff and can be aborted there.
+		if errors.Is(err, errNotFound) || errors.Is(err, errForbidden) {
 			resp.State.RemoveResource(ctx)
 			return
 		}

@@ -1,4 +1,5 @@
 resource "pomeriumzero_cluster_settings" "default" {
+  cluster_id                      = pomeriumzero_cluster.default.id
   address                         = ":443"
   auto_apply_changesets           = true
   cookie_expire                   = "14h0m0s"

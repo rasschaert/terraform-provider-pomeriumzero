@@ -51,10 +51,10 @@ resource "pomeriumzero_service_account" "ci_short_lived" {
 
 ### Read-Only
 
-- `id` (String) The unique identifier of the service account.
 - `created_at` (String) The time the service account was created.
-- `updated_at` (String) The time the service account was last updated.
+- `id` (String) The unique identifier of the service account.
 - `token` (String, Sensitive) The bearer token for this service account. Only available after creation; use `nonsensitive(resource.token)` to print it.
+- `updated_at` (String) The time the service account was last updated.
 
 ## Import
 

@@ -149,7 +149,8 @@ func (r *PolicyResource) Read(ctx context.Context, req resource.ReadRequest, res
 
 	var policy Policy
 	if err := r.client.get(ctx, r.client.policyURL(state.ID.ValueString()), &policy); err != nil {
-		if errors.Is(err, errNotFound) {
+		// See cluster_resource.go Read for the rationale on treating 403 as gone.
+		if errors.Is(err, errNotFound) || errors.Is(err, errForbidden) {
 			resp.State.RemoveResource(ctx)
 			return
 		}

@@ -14,6 +14,12 @@ import (
 // errNotFound is returned by apiClient methods when the API responds with 404.
 var errNotFound = fmt.Errorf("not found")
 
+// errForbidden is returned by apiClient methods when the API responds with 403.
+// Pomerium Zero returns 403 for resources that have been deleted (the auth check
+// fires before the existence check), so resources treat this as "gone from the
+// API" and remove themselves from state, letting Terraform plan a recreate.
+var errForbidden = fmt.Errorf("forbidden")
+
 // apiClient handles all HTTP communication with the Pomerium Zero API.
 type apiClient struct {
 	http           *http.Client
@@ -60,7 +66,7 @@ func (c *apiClient) do(ctx context.Context, method, url string, body io.Reader) 
 }
 
 // get performs a GET request and JSON-decodes the response body into out.
-// Returns errNotFound if the server responds with 404.
+// Returns errNotFound if the server responds with 404, or errForbidden on 403.
 func (c *apiClient) get(ctx context.Context, url string, out interface{}) error {
 	resp, err := c.do(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -79,6 +85,9 @@ func (c *apiClient) get(ctx context.Context, url string, out interface{}) error 
 
 	if resp.StatusCode == http.StatusNotFound {
 		return errNotFound
+	}
+	if resp.StatusCode == http.StatusForbidden {
+		return errForbidden
 	}
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("unexpected status %d: %s", resp.StatusCode, body)
