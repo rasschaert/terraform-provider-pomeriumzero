@@ -337,6 +337,91 @@ func TestCreateRouteRequest_NullOptionalFieldsOmitted(t *testing.T) {
 	}
 }
 
+func TestMapRouteResponseToModel_SetRequestHeaders(t *testing.T) {
+	ctx := context.Background()
+	base := map[string]interface{}{
+		"id":          "route-1",
+		"name":        "r",
+		"namespaceId": "ns",
+		"from":        "https://a.example.com",
+	}
+
+	t.Run("present headers are mapped", func(t *testing.T) {
+		resp := copyMap(base)
+		resp["setRequestHeaders"] = map[string]interface{}{
+			"Authorization": "${pomerium.request.headers[\"X-Id-Token\"]}",
+			"X-Static":      "foo",
+		}
+		model := mustMapRoute(t, ctx, resp)
+		if model.SetRequestHeaders.IsNull() {
+			t.Fatal("SetRequestHeaders: expected non-null when present")
+		}
+		if len(model.SetRequestHeaders.Elements()) != 2 {
+			t.Errorf("SetRequestHeaders: got %d elements, want 2", len(model.SetRequestHeaders.Elements()))
+		}
+	})
+
+	t.Run("absent headers map to null", func(t *testing.T) {
+		model := mustMapRoute(t, ctx, base)
+		if !model.SetRequestHeaders.IsNull() {
+			t.Errorf("SetRequestHeaders: expected null when absent, got %v", model.SetRequestHeaders)
+		}
+	})
+
+	t.Run("empty headers map to null", func(t *testing.T) {
+		resp := copyMap(base)
+		resp["setRequestHeaders"] = map[string]interface{}{}
+		model := mustMapRoute(t, ctx, resp)
+		if !model.SetRequestHeaders.IsNull() {
+			t.Errorf("SetRequestHeaders: expected null when empty, got %v", model.SetRequestHeaders)
+		}
+	})
+}
+
+func TestCreateRouteRequest_SetRequestHeaders(t *testing.T) {
+	ctx := context.Background()
+	to, _ := types.ListValueFrom(ctx, types.StringType, []string{"https://backend:8080"})
+
+	t.Run("non-null map is sent as object", func(t *testing.T) {
+		headers, _ := types.MapValueFrom(ctx, types.StringType, map[string]string{
+			"Authorization": "${pomerium.request.headers[\"X-Id-Token\"]}",
+			"X-Static":      "bar",
+		})
+		model := &RouteResourceModel{
+			Name:              types.StringValue("r"),
+			NamespaceID:       types.StringValue("ns"),
+			From:              types.StringValue("https://a.example.com"),
+			To:                to,
+			SetRequestHeaders: headers,
+		}
+		req := createRouteRequest(model)
+		got, ok := req["setRequestHeaders"].(map[string]string)
+		if !ok {
+			t.Fatalf("setRequestHeaders: got %T, want map[string]string", req["setRequestHeaders"])
+		}
+		if got["Authorization"] != "${pomerium.request.headers[\"X-Id-Token\"]}" {
+			t.Errorf("Authorization: got %q", got["Authorization"])
+		}
+		if got["X-Static"] != "bar" {
+			t.Errorf("X-Static: got %q", got["X-Static"])
+		}
+	})
+
+	t.Run("null map is omitted from request", func(t *testing.T) {
+		model := &RouteResourceModel{
+			Name:              types.StringValue("r"),
+			NamespaceID:       types.StringValue("ns"),
+			From:              types.StringValue("https://a.example.com"),
+			To:                to,
+			SetRequestHeaders: types.MapNull(types.StringType),
+		}
+		req := createRouteRequest(model)
+		if _, exists := req["setRequestHeaders"]; exists {
+			t.Error("setRequestHeaders should not be present when model field is null")
+		}
+	})
+}
+
 func TestCreateRouteRequest_NullKubernetesTokenAbsent(t *testing.T) {
 	// When KubernetesServiceAccountToken is null, it must not appear in the request.
 	to, _ := types.ListValueFrom(context.Background(), types.StringType, []string{"https://backend:8080"})

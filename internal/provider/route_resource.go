@@ -55,6 +55,7 @@ type RouteResourceModel struct {
 	Prefix                                    types.String `tfsdk:"prefix"`
 	PrefixRewrite                             types.String `tfsdk:"prefix_rewrite"`
 	KubernetesServiceAccountToken             types.String `tfsdk:"kubernetes_service_account_token"`
+	SetRequestHeaders                         types.Map    `tfsdk:"set_request_headers"`
 	EnforcedPolicyIDs                         types.List   `tfsdk:"enforced_policy_ids"`
 	CreatedAt                                 types.String `tfsdk:"created_at"`
 	UpdatedAt                                 types.String `tfsdk:"updated_at"`
@@ -163,6 +164,11 @@ func (r *RouteResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				Optional:            true,
 				MarkdownDescription: "The Kubernetes service account token to use for authentication.",
 				Sensitive:           true,
+			},
+			"set_request_headers": schema.MapAttribute{
+				ElementType:         types.StringType,
+				Optional:            true,
+				MarkdownDescription: "Map of headers to set on requests before forwarding to the upstream service. Values support Pomerium's dynamic substitution syntax (e.g. `${pomerium.request.headers[\"X-Id-Token\"]}`). Use `$$` to emit a literal `$`.",
 			},
 			"enforced_policy_ids": schema.ListAttribute{
 				ElementType:         types.StringType,
@@ -397,6 +403,11 @@ func createRouteRequest(model *RouteResourceModel) map[string]interface{} {
 	if !model.TLSDownstreamServerName.IsNull() {
 		req["tlsDownstreamServerName"] = model.TLSDownstreamServerName.ValueString()
 	}
+	if !model.SetRequestHeaders.IsNull() {
+		headers := make(map[string]string, len(model.SetRequestHeaders.Elements()))
+		model.SetRequestHeaders.ElementsAs(context.Background(), &headers, false)
+		req["setRequestHeaders"] = headers
+	}
 
 	return req
 }
@@ -511,6 +522,24 @@ func mapRouteResponseToModel(ctx context.Context, apiResponse map[string]interfa
 		model.KubernetesServiceAccountToken = types.StringValue(v)
 	} else {
 		model.KubernetesServiceAccountToken = types.StringNull()
+	}
+
+	// setRequestHeaders: only set when the API returns a non-empty object so
+	// that null in config doesn't drift against an empty map in state.
+	if headers, ok := apiResponse["setRequestHeaders"].(map[string]interface{}); ok && len(headers) > 0 {
+		stringHeaders := make(map[string]string, len(headers))
+		for k, v := range headers {
+			if s, ok := v.(string); ok {
+				stringHeaders[k] = s
+			}
+		}
+		mapVal, diags := types.MapValueFrom(ctx, types.StringType, stringHeaders)
+		if diags.HasError() {
+			return RouteResourceModel{}, fmt.Errorf("error mapping setRequestHeaders: %v", diags)
+		}
+		model.SetRequestHeaders = mapVal
+	} else {
+		model.SetRequestHeaders = types.MapNull(types.StringType)
 	}
 
 	// enforced_policy_ids: read-only, set by namespace/org policies
