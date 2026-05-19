@@ -46,3 +46,21 @@ resource "pomeriumzero_route" "kubernetes_api" {
   pass_identity_headers = true
   kubernetes_service_account_token = data.kubernetes_secret.k8s_api_service_account_token.data["token"]
 }
+
+# Rewrite an incoming custom header into the upstream Authorization header.
+# Useful when the same Authorization slot is already needed for environment-level
+# auth (e.g. a Pomerium service-account JWT) and you want to carry an application
+# user token (e.g. Cognito) through to the upstream as Authorization.
+resource "pomeriumzero_route" "app_backend" {
+  name             = "app-backend"
+  from             = "https://app-backend.example.com"
+  to               = ["http://app-backend.app-backend.svc.cluster.local:3000"]
+  namespace_id     = data.pomeriumzero_cluster.default.namespace_id
+  allow_websockets = false
+  policy_ids = [
+    pomeriumzero_policy.allow_app_backend_service_account.id,
+  ]
+  set_request_headers = {
+    Authorization = "$${pomerium.request.headers[\"X-Id-Token\"]}"
+  }
+}
